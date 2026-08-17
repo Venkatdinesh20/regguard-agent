@@ -51,7 +51,7 @@ python -m venv .venv
 
 pip install -e ".[dev]"
 
-python -m app.main                 # four demo investigations, end to end
+python -m app.main                 # five demo investigations, end to end
 pytest                             # 105 tests
 ```
 
@@ -60,6 +60,10 @@ The default provider is a deterministic in-process model (`LLM_PROVIDER=stub`,
 OpenAI and Anthropic. It exists so the graph, the guardrails, the tools, the API and the
 human-in-the-loop pause are all runnable and testable **without credentials, network access or
 spend** — including in CI. It is a test double, never business logic.
+
+A captured run of all five demo cases — HIGH with a human pause, MEDIUM, LOW, and an out-of-scope
+query that finishes in one step without spending a tool call — is in
+[`docs/sample-run.txt`](docs/sample-run.txt).
 
 ### Running against a real LLM
 
