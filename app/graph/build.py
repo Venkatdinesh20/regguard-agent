@@ -32,7 +32,6 @@ from collections.abc import Hashable
 from functools import lru_cache
 from typing import Any
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.reporter import human_approval_node, intake_node, report_node
@@ -45,6 +44,7 @@ from app.agents.specialists import (
 from app.agents.supervisor import route_from_state, supervisor_node
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.graph.checkpointer import BoundedMemorySaver
 from app.graph.state import InvestigationState
 from app.schemas.investigation import RiskLevel
 
@@ -116,14 +116,21 @@ def build_graph(checkpointer: Any | None = None) -> Any:
 
 @lru_cache
 def get_graph() -> Any:
-    """Process-wide compiled graph with an in-memory checkpointer.
+    """Process-wide compiled graph with a memory-bounded checkpointer.
 
-    ``MemorySaver`` keeps this repository runnable with no infrastructure. For a
-    real deployment swap in ``langgraph-checkpoint-postgres`` so paused
-    investigations survive a restart and can be resumed by a different worker —
-    the graph definition above does not change.
+    :class:`~app.graph.checkpointer.BoundedMemorySaver` keeps this repository
+    runnable with no infrastructure while capping retention at
+    ``MAX_RETAINED_INVESTIGATIONS`` threads, so a long-lived API process does not
+    grow without limit. For a real deployment swap in
+    ``langgraph-checkpoint-postgres`` so paused investigations survive a restart
+    and can be resumed by a different worker — the graph definition above does
+    not change.
     """
-    return build_graph(checkpointer=MemorySaver())
+    return build_graph(
+        checkpointer=BoundedMemorySaver(
+            max_threads=get_settings().max_retained_investigations
+        )
+    )
 
 
 def reset_graph_cache() -> None:

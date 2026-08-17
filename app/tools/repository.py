@@ -5,12 +5,20 @@ through this repository, which validates every record into a Pydantic model on
 the way in. In production the JSON fixtures behind it are replaced by the core
 banking / case-management adapters; the tool layer above does not change.
 
-Time handling note
-------------------
-Because the shipped dataset is a fixed synthetic snapshot, lookback windows are
-anchored to the newest transaction in the data (:func:`reference_date`) rather
-than to wall-clock time. That keeps every run and every test deterministic. A
-production adapter would anchor to ``datetime.now(tz=UTC)`` instead.
+Time handling
+-------------
+``reference_date`` decides what "now" means when a lookback window is resolved,
+and it is a configuration choice rather than a hard-coded one:
+
+``TIME_ANCHOR=dataset`` (default)
+    Anchor to the newest transaction in the shipped snapshot. Every run and every
+    test is then deterministic regardless of the date it executes.
+``TIME_ANCHOR=now``
+    Anchor to wall-clock UTC, which is what a deployment reading a live source
+    system needs.
+
+The distinction matters when reading results: under ``dataset``, "the last 30
+days" means the 30 days before the data ends, not before today.
 """
 
 from __future__ import annotations
@@ -21,6 +29,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.core.config import TimeAnchor, get_settings
 from app.core.exceptions import RecordNotFoundError
 from app.schemas.investigation import CustomerProfile, Transaction
 
@@ -77,9 +86,20 @@ def high_risk_jurisdictions() -> frozenset[str]:
 
 
 @lru_cache
-def reference_date() -> datetime:
-    """The 'now' of the dataset: the newest transaction timestamp."""
+def dataset_reference_date() -> datetime:
+    """The newest transaction timestamp in the shipped dataset."""
     return max(parse_timestamp(item.timestamp) for item in all_transactions())
+
+
+def reference_date() -> datetime:
+    """What "now" means for lookback windows, per ``TIME_ANCHOR``.
+
+    Not cached: under ``TIME_ANCHOR=now`` a cached value would freeze the clock
+    for the lifetime of the process.
+    """
+    if get_settings().time_anchor is TimeAnchor.NOW:
+        return datetime.now(UTC)
+    return dataset_reference_date()
 
 
 def get_customer(customer_id: str) -> CustomerProfile:

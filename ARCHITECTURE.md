@@ -104,8 +104,13 @@ as *incomplete*, so a case is never silently under-evidenced.
 
 ## 5. Trust boundaries
 
-Three kinds of untrusted input, three defences:
+Four kinds of untrusted input, four defences:
 
+0. **Caller identity** → a bearer token resolved to a `Principal` with a role
+   (`app/core/security.py`). Only an `approver` may authorise an outcome, and the approver recorded in
+   the audit trail is the authenticated principal — never the `approver` field of the request body,
+   which is ignored (and logged) when it disagrees. Authentication is off by default so the repository
+   runs unconfigured; `ENVIRONMENT=production` refuses to start in that state.
 1. **Caller input** → Pydantic request models. Malformed case IDs, short queries and out-of-range
    windows are rejected at the HTTP edge (422) before any spend.
 2. **LLM routing output** → `RouteDecision` validation *and* `apply_guardrails`. A hallucinated route
@@ -139,10 +144,41 @@ A compliance system has to answer "could the model have made this number up?" wi
 * The **report's** `case_id`, `customer_id` and `risk_level` are overwritten from state after
   generation, so the writer cannot restate provenance incorrectly.
 * **Approval necessity** is a governance rule, not a model output.
+* **Approver identity** is taken from the authenticated principal. An audit trail whose reviewer name
+  came from the request body records nothing an auditor can rely on.
 
 Temperature defaults to `0.0` and applies to every call the system makes (`LLM_TEMPERATURE`,
 `app/core/llm.py`): a control-flow decision should be reproducible given the same evidence, and a
 report should not be creative.
+
+---
+
+## 6b. Time, retention and serialisation
+
+Three properties of the runtime that are easy to get wrong quietly.
+
+**What "now" means is configuration, not a constant.** `TIME_ANCHOR=dataset` (the default) anchors
+lookback windows to the newest transaction in the shipped snapshot, so every run and every test is
+deterministic whatever date it executes; `TIME_ANCHOR=now` anchors to wall-clock UTC, which is what a
+live source system needs. The distinction changes results, not just plumbing: under `dataset` the
+fixtures yield 12 transactions in a 30-day window, under `now` they yield 2, because the synthetic
+data predates today. `reference_date()` is deliberately uncached — a cached value would freeze the
+clock for the process lifetime.
+
+**Retention is bounded.** `MemorySaver` keeps every checkpoint of every thread for ever, which is
+acceptable in a script and a leak in a service: roughly one checkpoint per node, per investigation,
+for the process lifetime. `BoundedMemorySaver` keeps the `MAX_RETAINED_INVESTIGATIONS` most recently
+written threads and evicts the oldest, logging each eviction — so an approval that arrives after
+eviction has a traceable explanation instead of looking like data loss. This is a bound, not
+durability; the Postgres saver is still the answer for surviving a restart.
+
+**Checkpointed types are registered explicitly.** State channels carry Pydantic models and enums.
+LangGraph deserialises unregistered types with a warning today and will refuse to in a future release,
+so with floating `langgraph>=1.2,<2.0` this was a live upgrade hazard: reading or resuming a persisted
+investigation would have started failing on a minor bump. `REGGUARD_MSGPACK_TYPES` lists the six types
+that may be reconstructed from a checkpoint, and the test suite proves the round trip under
+`LANGGRAPH_STRICT_MSGPACK=true` — the future behaviour, exercised now. Adding a new model to state
+means adding it there, and the test fails if a registered type is renamed away.
 
 ---
 
@@ -164,6 +200,10 @@ report should not be creative.
 | Malformed approval payload | rejected and recorded as *not approved* |
 | Approval for a case that is not paused (or a second approval) | `InvestigationNotPausedError` → `409`; the decision is never silently dropped |
 | A thread reused for a second case | `ThreadAlreadyUsedError` → `409`, because append-only channels would mix the evidence |
+| Approval arriving after the case was evicted from memory | reads as "not found"; the eviction itself is logged with the thread id, so the cause is recoverable from the audit trail |
+| Unregistered type in a checkpoint | listed in `REGGUARD_MSGPACK_TYPES`; verified under strict serialisation so a dependency bump cannot break resume silently |
+| Missing or unknown bearer token when auth is on | `401`; an analyst token on the approval endpoint is `403` |
+| Production started without auth, or with the stub provider | startup `ValidationError` — the process refuses to run rather than running unsafely |
 
 ---
 
@@ -175,6 +215,8 @@ report should not be creative.
   place that needs to learn it exists.
 * **New tool for an existing specialist**: add the function, an `args_schema`, and append it to that
   specialist's tool list. Tool order matters only to the deterministic stub, which calls the first.
+* **New type in state**: add it to `REGGUARD_MSGPACK_TYPES` in `app/graph/checkpointer.py`, or resume
+  will break the day LangGraph enforces its allowlist.
 * **New guardrail**: add a branch to `apply_guardrails` and a test to `test_guardrails.py`. Guardrails
   are pure functions of `(decision, state)`, so they are cheap to test exhaustively.
 
@@ -182,8 +224,11 @@ report should not be creative.
 
 ## 9. Scaling and operations
 
-* The graph is stateless per request; state lives in the checkpointer. Swap `MemorySaver` for the
-  Postgres saver and the service scales horizontally, with paused cases resumable by any worker.
+* The graph is stateless per request; state lives in the checkpointer. Swap `BoundedMemorySaver` for
+  the Postgres saver and the service scales horizontally, with paused cases resumable by any worker.
+  Until then, retention is capped by `MAX_RETAINED_INVESTIGATIONS` (default 200) and a case older than
+  that cannot be resumed — which is the practical reason to make the swap before running this for real,
+  not just restart durability.
 * Cost is bounded per case by at most `MAX_SUPERVISOR_STEPS` routing calls (the budget is checked
   before the call, so the limit is never exceeded and never wasted) plus, per specialist, up to
   `MAX_TOOL_ITERATIONS` tool rounds and 2 summarisation calls (one corrective retry), plus 1 report
@@ -201,7 +246,11 @@ report should not be creative.
 * Fixture data is synthetic and small; the retriever is lexical, not semantic.
 * The rule engine encodes a handful of well-known typologies, not a bank's real typology library.
 * The deterministic stub imitates a competent supervisor. It demonstrates the *mechanism* end to end;
-  measuring real routing quality needs an offline eval set of cases with expected routes, which is
-  the first thing I would build next.
-* No authentication, rate limiting or PII redaction — deliberately out of scope for an exercise, and
-  listed in the README's hardening table.
+  measuring real routing *quality* needs an offline eval set of cases with expected routes, which is
+  the first thing I would build next. `tests/test_live_provider.py` checks that a real model works,
+  not that it routes well — those are different questions and only the first is answered.
+* Authentication is bearer tokens from configuration with two roles. It makes the approver identity
+  authenticated rather than self-declared, which was the point; it is not an identity provider, and
+  there is no token rotation, session revocation or rate limiting.
+* No PII redaction before prompts. With real customer data that is a prerequisite, not a nicety.
+* Retention is bounded but not durable: a restart loses paused investigations.

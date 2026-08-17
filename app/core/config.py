@@ -14,6 +14,19 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class TimeAnchor(StrEnum):
+    """What "now" means when a lookback window is resolved.
+
+    The shipped dataset is a fixed synthetic snapshot, so anchoring windows to
+    wall-clock time would make every run and every test depend on the date it is
+    executed. ``DATASET`` anchors to the newest transaction in the data instead.
+    A deployment reading a live source system sets ``NOW``.
+    """
+
+    DATASET = "dataset"
+    NOW = "now"
+
+
 class LLMProvider(StrEnum):
     """Which chat-model backend RegGuard talks to."""
 
@@ -49,6 +62,13 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
 
+    # --- data ---------------------------------------------------------------
+    time_anchor: TimeAnchor = Field(
+        default=TimeAnchor.DATASET,
+        description="Anchor lookback windows to the dataset snapshot (default, "
+        "deterministic) or to wall-clock time (for live source systems).",
+    )
+
     # --- agent guardrails --------------------------------------------------
     max_supervisor_steps: int = Field(
         default=8,
@@ -70,6 +90,33 @@ class Settings(BaseSettings):
         "supervisor's choice is overridden as a loop.",
     )
     graph_recursion_limit: int = Field(default=40, ge=5, le=200)
+
+    # --- retention ----------------------------------------------------------
+    max_retained_investigations: int = Field(
+        default=200,
+        ge=1,
+        le=100_000,
+        description="How many investigations the in-memory checkpointer keeps "
+        "before evicting the least recently written. Prevents unbounded growth "
+        "in a long-lived process; irrelevant once a durable checkpointer is "
+        "configured.",
+    )
+
+    # --- authentication -----------------------------------------------------
+    auth_enabled: bool = Field(
+        default=False,
+        description="Require a bearer token on the investigation endpoints. "
+        "Off by default so the repository is runnable out of the box; "
+        "mandatory in production, which is enforced below.",
+    )
+    api_tokens: str = Field(
+        default="",
+        description="Comma-separated token definitions, each "
+        "'token:principal:role' where role is 'analyst' or 'approver'. In a "
+        "real deployment these come from an identity provider, not an "
+        "environment variable — this is the smallest thing that makes the "
+        "approver identity authenticated rather than self-declared.",
+    )
 
     # --- human in the loop -------------------------------------------------
     require_approval_for_high_risk: bool = Field(
@@ -96,6 +143,20 @@ class Settings(BaseSettings):
             raise ValueError(
                 "LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY to be set in .env"
             )
+        if self.auth_enabled and not self.api_tokens.strip():
+            raise ValueError("AUTH_ENABLED=true requires API_TOKENS to be set")
+        if self.is_production:
+            if not self.auth_enabled:
+                raise ValueError(
+                    "ENVIRONMENT=production requires AUTH_ENABLED=true: an "
+                    "approval must be attributable to an authenticated "
+                    "reviewer, not to a name supplied in the request body."
+                )
+            if self.llm_provider is LLMProvider.STUB:
+                raise ValueError(
+                    "ENVIRONMENT=production cannot run with LLM_PROVIDER=stub: "
+                    "the stub is a test double and makes no routing decisions."
+                )
         return self
 
     @property

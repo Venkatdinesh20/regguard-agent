@@ -15,6 +15,9 @@ dependencies = [
     "langchain-anthropic>=1.5,<2.0",
     "pydantic>=2.10,<3.0",
     "pydantic-settings>=2.7,<3.0",
+    # Direct dependency because pydantic-settings only reads .env files when
+    # dotenv is installed; declaring it explicitly keeps that behaviour from
+    # depending on another package's extras.
     "python-dotenv>=1.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
@@ -79,5 +82,10 @@ disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+# 'live' is deselected by default: it calls a real LLM, costs money and needs a
+# key. Run it explicitly with `pytest -m live` or `make test-live`.
+addopts = "-q --strict-markers -m 'not live'"
+markers = [
+    "live: hits a real LLM provider; requires REGGUARD_LIVE_TEST=1 and an API key",
+]
 filterwarnings = ["ignore::DeprecationWarning"]

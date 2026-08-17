@@ -53,6 +53,30 @@ jobs:
       - name: Smoke-run the agent end to end
         run: python -m app.main
 
+  locked:
+    name: locked install (pinned versions)
+    runs-on: ubuntu-latest
+    env:
+      LLM_PROVIDER: stub
+      LOG_FORMAT: text
+      LOG_LEVEL: WARNING
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      # The quality job installs the declared ranges so upstream drift shows up.
+      # This job installs requirements.lock, so the exact verified set is proven
+      # to still work. If these two ever disagree, the lock needs refreshing.
+      - name: Install pinned versions
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install -e . --no-deps
+      - name: Test
+        run: pytest
+
   docker:
     name: docker build
     runs-on: ubuntu-latest

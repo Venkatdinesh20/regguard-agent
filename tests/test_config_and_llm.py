@@ -58,7 +58,15 @@ class TestSettingsValidation:
             _settings(**{field: value})
 
     def test_production_flag_is_derived_from_environment(self):
-        assert _settings(environment="production").is_production is True
+        """Production additionally demands auth and a real provider (test_auth)."""
+        production = _settings(
+            environment="production",
+            auth_enabled=True,
+            api_tokens="tok:c.officer@bank.example:approver",
+            llm_provider="openai",
+            openai_api_key="sk-test",
+        )
+        assert production.is_production is True
         assert _settings(environment="development").is_production is False
 
 
