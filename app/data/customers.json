@@ -1,0 +1,46 @@
+[
+  {
+    "customer_id": "C001",
+    "full_name": "Rahul Menon",
+    "country": "Canada",
+    "account_age_days": 730,
+    "average_monthly_spend": 2500.0,
+    "kyc_status": "VERIFIED",
+    "pep_flag": false,
+    "sanctions_hit": false,
+    "occupation": "Retail store manager"
+  },
+  {
+    "customer_id": "C002",
+    "full_name": "Aisha Khan",
+    "country": "Canada",
+    "account_age_days": 1450,
+    "average_monthly_spend": 4100.0,
+    "kyc_status": "VERIFIED",
+    "pep_flag": false,
+    "sanctions_hit": false,
+    "occupation": "Software engineer"
+  },
+  {
+    "customer_id": "C003",
+    "full_name": "Dmitri Volkov",
+    "country": "Cyprus",
+    "account_age_days": 95,
+    "average_monthly_spend": 800.0,
+    "kyc_status": "PENDING",
+    "pep_flag": true,
+    "sanctions_hit": false,
+    "occupation": "Regional trade official"
+  },
+  {
+    "customer_id": "C004",
+    "full_name": "Grace Lee",
+    "country": "Canada",
+    "account_age_days": 2100,
+    "average_monthly_spend": 300.0,
+    "kyc_status": "VERIFIED",
+    "pep_flag": false,
+    "sanctions_hit": false,
+    "occupation": "Retired teacher"
+  }
+]

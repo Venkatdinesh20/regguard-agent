@@ -1,0 +1,112 @@
+"""Data access layer for the investigation tools.
+
+The tools never read files or shape raw dictionaries themselves — they go
+through this repository, which validates every record into a Pydantic model on
+the way in. In production the JSON fixtures behind it are replaced by the core
+banking / case-management adapters; the tool layer above does not change.
+
+Time handling note
+------------------
+Because the shipped dataset is a fixed synthetic snapshot, lookback windows are
+anchored to the newest transaction in the data (:func:`reference_date`) rather
+than to wall-clock time. That keeps every run and every test deterministic. A
+production adapter would anchor to ``datetime.now(tz=UTC)`` instead.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime, timedelta
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from app.core.exceptions import RecordNotFoundError
+from app.schemas.investigation import CustomerProfile, Transaction
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+
+def _load_json(filename: str) -> Any:
+    path = DATA_DIR / filename
+    if not path.exists():  # pragma: no cover - packaging guard
+        raise FileNotFoundError(f"Missing data fixture: {path}")
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def parse_timestamp(value: str) -> datetime:
+    """Parse an ISO-8601 timestamp, tolerating a trailing ``Z``."""
+    normalised = value.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalised)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+@lru_cache
+def all_customers() -> dict[str, CustomerProfile]:
+    """Every customer, validated, keyed by ``customer_id``."""
+    records = _load_json("customers.json")
+    return {
+        record["customer_id"]: CustomerProfile.model_validate(record)
+        for record in records
+    }
+
+
+@lru_cache
+def all_transactions() -> tuple[Transaction, ...]:
+    """Every transaction, validated, ordered by timestamp."""
+    records = _load_json("transactions.json")
+    parsed = [Transaction.model_validate(record) for record in records]
+    parsed.sort(key=lambda item: parse_timestamp(item.timestamp))
+    return tuple(parsed)
+
+
+@lru_cache
+def all_policies() -> tuple[dict[str, Any], ...]:
+    """The policy corpus searched by the policy specialist."""
+    return tuple(_load_json("policies.json"))
+
+
+@lru_cache
+def high_risk_jurisdictions() -> frozenset[str]:
+    """Internal high-risk jurisdiction list."""
+    reference = _load_json("reference.json")
+    return frozenset(reference["high_risk_jurisdictions"])
+
+
+@lru_cache
+def reference_date() -> datetime:
+    """The 'now' of the dataset: the newest transaction timestamp."""
+    return max(parse_timestamp(item.timestamp) for item in all_transactions())
+
+
+def get_customer(customer_id: str) -> CustomerProfile:
+    """Look up one customer or raise :class:`RecordNotFoundError`."""
+    try:
+        return all_customers()[customer_id]
+    except KeyError as exc:
+        known = ", ".join(sorted(all_customers()))
+        raise RecordNotFoundError(
+            f"No customer with id '{customer_id}'. Known customers: {known}."
+        ) from exc
+
+
+def get_transactions(customer_id: str, lookback_days: int = 30) -> list[Transaction]:
+    """Transactions for a customer inside the lookback window.
+
+    Raises :class:`RecordNotFoundError` if the customer itself is unknown, so a
+    typo is reported as a bad identifier rather than as "no activity".
+    """
+    get_customer(customer_id)  # existence check
+    cutoff = reference_date() - timedelta(days=lookback_days)
+    return [
+        item
+        for item in all_transactions()
+        if item.customer_id == customer_id and parse_timestamp(item.timestamp) >= cutoff
+    ]
+
+
+def known_customer_ids() -> list[str]:
+    return sorted(all_customers())

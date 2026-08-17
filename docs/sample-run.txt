@@ -1,0 +1,316 @@
+
+RegGuard — provider=stub model=gpt-4.1-mini
+
+==============================================================================
+CASE-1001  status=awaiting_approval
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> CUSTOMER    (confidence 0.85)
+     CUSTOMER evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  2. -> TRANSACTION (confidence 0.85)
+     TRANSACTION evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  3. -> FRAUD       (confidence 0.85)
+     FRAUD evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  4. -> POLICY      (confidence 0.85)
+     POLICY evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  5. -> FINISH      (confidence 0.90)
+     Customer, transaction, risk-scoring and policy evidence are all present; the report can be written.
+
+Evidence collected:
+  [CUSTOMER] Rahul Menon (C001), resident of Canada, account age 730 days, KYC VERIFIED, monthly spend baseline 2500.0.
+  [TRANSACTION] 12 transactions in the last 30 days: credits 31500.0, debits 21103.24, largest credit 9700.0, 10 distinct counterparties.
+      - Cash credits total 28,300.00 in the window.
+      - Credits are 12.6x the monthly baseline.
+      - 2 cross-border transactions.
+  [FRAUD] Deterministic rule engine regguard-rules-1.0.0 scored customer C001 at 65/100 = HIGH across 12 transactions, triggering 3 rule(s).
+      - R01_STRUCTURING: 3 cash deposits between 7,500 and 10,000 within 72h — consistent with deliberate avoidance of the reporting threshold.
+      - R02_THRESHOLD_AGGREGATION: Cash deposits totalling 19,100.00 within 24h, each individually below the reporting threshold.
+      - R04_HIGH_RISK_GEOGRAPHY: Activity involves jurisdictions on the internal high-risk list: United Arab Emirates
+  [POLICY] Retrieved 3 applicable policy document(s) for topic 'structuring cash deposit threshold transaction fraud kyc str'. Obligations include reporting deadlines, enhanced due diligence triggers and the prohibition on tipping off.
+      - POL-STR-001: Structuring and cash deposit reporting
+      - POL-STR-002: Suspicious Transaction Report (STR/SAR) obligations
+      - POL-ACC-005: Dormant and low-activity account anomalies
+
+Risk level: HIGH
+SAR/STR recommended: True
+
+Summary:
+  Investigation CASE-1001 assessed overall risk as HIGH on the basis of 4 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Escalate to a compliance officer for suspicious transaction report review.
+  - Apply enhanced due diligence and request source-of-funds evidence.
+  - Do not contact the customer about the report (no tipping off).
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+
+*** PAUSED FOR HUMAN AUTHORISATION ***
+  Authorise this recommendation? Respond with approved, approver and optional notes.
+  thread_id=CASE-1001-20719c10
+
+>>> simulating human authorisation
+
+==============================================================================
+CASE-1001  status=approved
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> CUSTOMER    (confidence 0.85)
+     CUSTOMER evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  2. -> TRANSACTION (confidence 0.85)
+     TRANSACTION evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  3. -> FRAUD       (confidence 0.85)
+     FRAUD evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  4. -> POLICY      (confidence 0.85)
+     POLICY evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  5. -> FINISH      (confidence 0.90)
+     Customer, transaction, risk-scoring and policy evidence are all present; the report can be written.
+
+Evidence collected:
+  [CUSTOMER] Rahul Menon (C001), resident of Canada, account age 730 days, KYC VERIFIED, monthly spend baseline 2500.0.
+  [TRANSACTION] 12 transactions in the last 30 days: credits 31500.0, debits 21103.24, largest credit 9700.0, 10 distinct counterparties.
+      - Cash credits total 28,300.00 in the window.
+      - Credits are 12.6x the monthly baseline.
+      - 2 cross-border transactions.
+  [FRAUD] Deterministic rule engine regguard-rules-1.0.0 scored customer C001 at 65/100 = HIGH across 12 transactions, triggering 3 rule(s).
+      - R01_STRUCTURING: 3 cash deposits between 7,500 and 10,000 within 72h — consistent with deliberate avoidance of the reporting threshold.
+      - R02_THRESHOLD_AGGREGATION: Cash deposits totalling 19,100.00 within 24h, each individually below the reporting threshold.
+      - R04_HIGH_RISK_GEOGRAPHY: Activity involves jurisdictions on the internal high-risk list: United Arab Emirates
+  [POLICY] Retrieved 3 applicable policy document(s) for topic 'structuring cash deposit threshold transaction fraud kyc str'. Obligations include reporting deadlines, enhanced due diligence triggers and the prohibition on tipping off.
+      - POL-STR-001: Structuring and cash deposit reporting
+      - POL-STR-002: Suspicious Transaction Report (STR/SAR) obligations
+      - POL-ACC-005: Dormant and low-activity account anomalies
+
+Risk level: HIGH
+SAR/STR recommended: True
+
+Summary:
+  Investigation CASE-1001 assessed overall risk as HIGH on the basis of 4 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Escalate to a compliance officer for suspicious transaction report review.
+  - Apply enhanced due diligence and request source-of-funds evidence.
+  - Do not contact the customer about the report (no tipping off).
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+
+Human decision: APPROVED by demo.reviewer — Approved in demo mode; evidence reviewed.
+
+==============================================================================
+CASE-1002  status=reported
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> CUSTOMER    (confidence 0.85)
+     CUSTOMER evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  2. -> TRANSACTION (confidence 0.85)
+     TRANSACTION evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  3. -> FRAUD       (confidence 0.85)
+     FRAUD evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  4. -> POLICY      (confidence 0.85)
+     POLICY evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  5. -> FINISH      (confidence 0.90)
+     Customer, transaction, risk-scoring and policy evidence are all present; the report can be written.
+
+Evidence collected:
+  [CUSTOMER] Aisha Khan (C002), resident of Canada, account age 1450 days, KYC VERIFIED, monthly spend baseline 4100.0.
+  [TRANSACTION] 9 transactions in the last 30 days: credits 11800.0, debits 6692.15, largest credit 5900.0, 6 distinct counterparties.
+  [FRAUD] Deterministic rule engine regguard-rules-1.0.0 scored customer C002 at 0/100 = LOW across 9 transactions, triggering 0 rule(s).
+  [POLICY] Retrieved 3 applicable policy document(s) for topic 'threshold transaction fraud kyc risk customer account policy'. Obligations include reporting deadlines, enhanced due diligence triggers and the prohibition on tipping off.
+      - POL-EDD-003: Enhanced due diligence triggers
+      - POL-ACC-005: Dormant and low-activity account anomalies
+      - POL-JUR-004: High-risk jurisdiction handling
+
+Risk level: LOW
+SAR/STR recommended: False
+
+Summary:
+  Investigation CASE-1002 assessed overall risk as LOW on the basis of 4 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Close the case with no further action and retain the record.
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+
+==============================================================================
+CASE-1003  status=awaiting_approval
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> CUSTOMER    (confidence 0.85)
+     CUSTOMER evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  2. -> TRANSACTION (confidence 0.85)
+     TRANSACTION evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  3. -> FRAUD       (confidence 0.85)
+     FRAUD evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  4. -> POLICY      (confidence 0.85)
+     POLICY evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  5. -> FINISH      (confidence 0.90)
+     Customer, transaction, risk-scoring and policy evidence are all present; the report can be written.
+
+Evidence collected:
+  [CUSTOMER] Dmitri Volkov (C003), resident of Cyprus, account age 95 days, KYC PENDING, monthly spend baseline 800.0.
+      - Customer is a politically exposed person.
+      - KYC status is PENDING.
+      - Account is less than 180 days old.
+  [TRANSACTION] 8 transactions in the last 30 days: credits 54900.0, debits 44120.0, largest credit 18000.0, 4 distinct counterparties.
+      - Credits are 68.62x the monthly baseline.
+      - 6 cross-border transactions.
+  [FRAUD] Deterministic rule engine regguard-rules-1.0.0 scored customer C003 at 100/100 = HIGH across 8 transactions, triggering 6 rule(s).
+      - R03_PASS_THROUGH: Funds of 12,000.00 received from Cyprus left the account within 72h at a similar amount — layering indicator.
+      - R04_HIGH_RISK_GEOGRAPHY: Activity involves jurisdictions on the internal high-risk list: British Virgin Islands, Cyprus, Panama
+      - R05_BASELINE_ANOMALY: Largest credit 18,000.00 is 22.5x the account's monthly baseline of 800.00.
+      - R07_NEW_ACCOUNT_LARGE_WIRES: Account is 95 days old and has 6 wires above 10,000.
+      - R09_PEP: Customer is a politically exposed person; enhanced due diligence applies.
+      - R10_KYC_NOT_VERIFIED: Account is transacting while KYC status is PENDING.
+  [POLICY] Retrieved 3 applicable policy document(s) for topic 'threshold wire transaction fraud pep kyc risk customer'. Obligations include reporting deadlines, enhanced due diligence triggers and the prohibition on tipping off.
+      - POL-EDD-003: Enhanced due diligence triggers
+      - POL-JUR-004: High-risk jurisdiction handling
+      - POL-ACC-005: Dormant and low-activity account anomalies
+
+Risk level: HIGH
+SAR/STR recommended: True
+
+Summary:
+  Investigation CASE-1003 assessed overall risk as HIGH on the basis of 4 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Escalate to a compliance officer for suspicious transaction report review.
+  - Apply enhanced due diligence and request source-of-funds evidence.
+  - Do not contact the customer about the report (no tipping off).
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+
+*** PAUSED FOR HUMAN AUTHORISATION ***
+  Authorise this recommendation? Respond with approved, approver and optional notes.
+  thread_id=CASE-1003-4141d28e
+
+>>> simulating human authorisation
+
+==============================================================================
+CASE-1003  status=approved
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> CUSTOMER    (confidence 0.85)
+     CUSTOMER evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  2. -> TRANSACTION (confidence 0.85)
+     TRANSACTION evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  3. -> FRAUD       (confidence 0.85)
+     FRAUD evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  4. -> POLICY      (confidence 0.85)
+     POLICY evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  5. -> FINISH      (confidence 0.90)
+     Customer, transaction, risk-scoring and policy evidence are all present; the report can be written.
+
+Evidence collected:
+  [CUSTOMER] Dmitri Volkov (C003), resident of Cyprus, account age 95 days, KYC PENDING, monthly spend baseline 800.0.
+      - Customer is a politically exposed person.
+      - KYC status is PENDING.
+      - Account is less than 180 days old.
+  [TRANSACTION] 8 transactions in the last 30 days: credits 54900.0, debits 44120.0, largest credit 18000.0, 4 distinct counterparties.
+      - Credits are 68.62x the monthly baseline.
+      - 6 cross-border transactions.
+  [FRAUD] Deterministic rule engine regguard-rules-1.0.0 scored customer C003 at 100/100 = HIGH across 8 transactions, triggering 6 rule(s).
+      - R03_PASS_THROUGH: Funds of 12,000.00 received from Cyprus left the account within 72h at a similar amount — layering indicator.
+      - R04_HIGH_RISK_GEOGRAPHY: Activity involves jurisdictions on the internal high-risk list: British Virgin Islands, Cyprus, Panama
+      - R05_BASELINE_ANOMALY: Largest credit 18,000.00 is 22.5x the account's monthly baseline of 800.00.
+      - R07_NEW_ACCOUNT_LARGE_WIRES: Account is 95 days old and has 6 wires above 10,000.
+      - R09_PEP: Customer is a politically exposed person; enhanced due diligence applies.
+      - R10_KYC_NOT_VERIFIED: Account is transacting while KYC status is PENDING.
+  [POLICY] Retrieved 3 applicable policy document(s) for topic 'threshold wire transaction fraud pep kyc risk customer'. Obligations include reporting deadlines, enhanced due diligence triggers and the prohibition on tipping off.
+      - POL-EDD-003: Enhanced due diligence triggers
+      - POL-JUR-004: High-risk jurisdiction handling
+      - POL-ACC-005: Dormant and low-activity account anomalies
+
+Risk level: HIGH
+SAR/STR recommended: True
+
+Summary:
+  Investigation CASE-1003 assessed overall risk as HIGH on the basis of 4 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Escalate to a compliance officer for suspicious transaction report review.
+  - Apply enhanced due diligence and request source-of-funds evidence.
+  - Do not contact the customer about the report (no tipping off).
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+
+Human decision: APPROVED by demo.reviewer — Approved in demo mode; evidence reviewed.
+
+==============================================================================
+CASE-1004  status=reported
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> CUSTOMER    (confidence 0.85)
+     CUSTOMER evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  2. -> TRANSACTION (confidence 0.85)
+     TRANSACTION evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  3. -> FRAUD       (confidence 0.85)
+     FRAUD evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  4. -> POLICY      (confidence 0.85)
+     POLICY evidence has not been collected yet; it is the next prerequisite for a defensible assessment.
+  5. -> FINISH      (confidence 0.90)
+     Customer, transaction, risk-scoring and policy evidence are all present; the report can be written.
+
+Evidence collected:
+  [CUSTOMER] Grace Lee (C004), resident of Canada, account age 2100 days, KYC VERIFIED, monthly spend baseline 300.0.
+  [TRANSACTION] 6 transactions in the last 30 days: credits 46850.0, debits 43716.55, largest credit 45000.0, 6 distinct counterparties.
+      - Credits are 156.17x the monthly baseline.
+      - 1 cross-border transactions.
+  [FRAUD] Deterministic rule engine regguard-rules-1.0.0 scored customer C004 at 55/100 = MEDIUM across 6 transactions, triggering 3 rule(s).
+      - R04_HIGH_RISK_GEOGRAPHY: Activity involves jurisdictions on the internal high-risk list: Nigeria
+      - R05_BASELINE_ANOMALY: Largest credit 45,000.00 is 150.0x the account's monthly baseline of 300.00.
+      - R06_RAPID_DISPERSAL: A credit of 45,000.00 was dispersed to 2 distinct third parties within 72h (43,500.00 total).
+  [POLICY] Retrieved 3 applicable policy document(s) for topic 'threshold transfer transaction fraud kyc dispersal risk customer'. Obligations include reporting deadlines, enhanced due diligence triggers and the prohibition on tipping off.
+      - POL-EDD-003: Enhanced due diligence triggers
+      - POL-ACC-005: Dormant and low-activity account anomalies
+      - POL-JUR-004: High-risk jurisdiction handling
+
+Risk level: MEDIUM
+SAR/STR recommended: False
+
+Summary:
+  Investigation CASE-1004 assessed overall risk as MEDIUM on the basis of 4 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Place the account under enhanced monitoring for 90 days.
+  - Request supporting documentation for the anomalous activity.
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+
+==============================================================================
+CASE-1005  status=reported
+==============================================================================
+
+Control flow chosen by the LLM supervisor:
+  1. -> FINISH      (confidence 0.90)
+     The query does not describe a financial-crime compliance matter, so no specialist applies.
+
+Risk level: LOW
+SAR/STR recommended: False
+
+Summary:
+  Investigation CASE-1005 assessed overall risk as LOW on the basis of 1 specialist finding(s). See key findings for the evidence relied upon and the policy references that apply.
+
+Recommended actions:
+  - Close the case with no further action and retain the record.
+
+Regulatory considerations:
+  - POL-STR-002: report within 30 days of establishing suspicion.
+  - POL-HITL-006: automated systems may not file reports unilaterally.
+

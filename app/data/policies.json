@@ -1,0 +1,86 @@
+[
+  {
+    "policy_id": "POL-STR-001",
+    "title": "Structuring and cash deposit reporting",
+    "jurisdiction": "Canada (PCMLTFA / FINTRAC-style)",
+    "tags": [
+      "structuring",
+      "cash",
+      "deposit",
+      "threshold",
+      "reporting",
+      "smurfing"
+    ],
+    "text": "Cash transactions of CAD 10,000 or more in a 24-hour period must be reported as a Large Cash Transaction Report. Multiple deposits below the threshold that aggregate above it, or that appear designed to avoid it, must be treated as possible structuring and escalated for suspicious transaction reporting regardless of individual amounts. Deposits made at differing branches or ATMs on consecutive days are a recognised structuring indicator."
+  },
+  {
+    "policy_id": "POL-STR-002",
+    "title": "Suspicious Transaction Report (STR/SAR) obligations",
+    "jurisdiction": "Canada / United States (BSA-style)",
+    "tags": [
+      "sar",
+      "str",
+      "suspicious",
+      "filing",
+      "deadline",
+      "reporting"
+    ],
+    "text": "Where there are reasonable grounds to suspect that a transaction is related to money laundering or terrorist financing, a report must be filed as soon as practicable after the suspicion is established, and in no case later than 30 calendar days. The customer must not be informed that a report has been filed (no tipping off). Supporting records must be retained for five years."
+  },
+  {
+    "policy_id": "POL-EDD-003",
+    "title": "Enhanced due diligence triggers",
+    "jurisdiction": "Internal - Financial Crime Policy v4.2",
+    "tags": [
+      "edd",
+      "due diligence",
+      "high risk",
+      "pep",
+      "jurisdiction",
+      "kyc"
+    ],
+    "text": "Enhanced due diligence is mandatory where any of the following apply: the customer is a politically exposed person or a close associate; KYC verification is PENDING or EXPIRED while the account transacts; the account is under 180 days old and receives wires above CAD 10,000; or funds originate from or are destined for a jurisdiction on the internal high-risk list. EDD requires source-of-funds evidence and sign-off by a compliance officer at manager level or above."
+  },
+  {
+    "policy_id": "POL-JUR-004",
+    "title": "High-risk jurisdiction handling",
+    "jurisdiction": "Internal - Financial Crime Policy v4.2",
+    "tags": [
+      "jurisdiction",
+      "geography",
+      "wire",
+      "cross-border",
+      "high risk",
+      "sanctions"
+    ],
+    "text": "Transfers involving jurisdictions on the internal high-risk list require documented commercial rationale. Rapid pass-through activity, in which funds received from a high-risk jurisdiction leave the account within 72 hours in a similar amount, is a layering indicator and must be escalated. Sanctions screening must be re-run on every cross-border payment, not only at onboarding."
+  },
+  {
+    "policy_id": "POL-ACC-005",
+    "title": "Dormant and low-activity account anomalies",
+    "jurisdiction": "Internal - Financial Crime Policy v4.2",
+    "tags": [
+      "dormant",
+      "mule",
+      "anomaly",
+      "baseline",
+      "elderly",
+      "fraud"
+    ],
+    "text": "A credit exceeding ten times the account's established monthly baseline, followed by dispersal to multiple third parties within 72 hours, is a money-mule indicator. Where the account holder is a vulnerable customer, the case must additionally be referred to the fraud and vulnerable-customer teams, and outbound payments should be held pending customer contact through an independently verified channel."
+  },
+  {
+    "policy_id": "POL-HITL-006",
+    "title": "Human authorisation of adverse outcomes",
+    "jurisdiction": "Internal - Model Risk & Automation Standard v2.1",
+    "tags": [
+      "human",
+      "approval",
+      "automation",
+      "model risk",
+      "governance",
+      "escalation"
+    ],
+    "text": "Automated systems may gather evidence, score risk and draft reports. They must not file a regulatory report, freeze an account, or close a customer relationship without explicit authorisation from a qualified human reviewer. Every automated recommendation must record the evidence relied upon, the model version, and the identity of the approving reviewer."
+  }
+]
