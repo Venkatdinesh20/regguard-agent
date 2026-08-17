@@ -21,7 +21,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
-from app.core.exceptions import RegGuardError
+from app.core.exceptions import (
+    InvestigationNotPausedError,
+    RegGuardError,
+    ThreadAlreadyUsedError,
+)
 from app.core.logging import configure_logging, get_logger
 from app.schemas.investigation import HumanApproval, InvestigationRequest
 from app.service import (
@@ -86,9 +90,13 @@ app = FastAPI(
 
 @app.exception_handler(RegGuardError)
 async def regguard_error_handler(_: object, exc: RegGuardError) -> JSONResponse:
+    """Map RegGuard's own errors to status codes; anything else stays a 500."""
+    conflict = isinstance(exc, ThreadAlreadyUsedError | InvestigationNotPausedError)
     logger.warning("api.domain_error", extra={"error": str(exc)})
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
+        status_code=(
+            status.HTTP_409_CONFLICT if conflict else status.HTTP_400_BAD_REQUEST
+        ),
         content={"detail": str(exc), "type": type(exc).__name__},
     )
 
@@ -151,7 +159,11 @@ def approve_investigation(
     thread_id: str,
     decision: ApprovalRequest = Body(...),
 ) -> InvestigationOutcome:
-    """Record a human authorisation decision and resume the paused graph."""
+    """Record a human authorisation decision and resume the paused graph.
+
+    Returns ``409 Conflict`` if the investigation is not awaiting authorisation:
+    a reviewer must never be told their decision was recorded when it was not.
+    """
     try:
         return resume_investigation(
             thread_id,
@@ -164,4 +176,8 @@ def approve_investigation(
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except InvestigationNotPausedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc

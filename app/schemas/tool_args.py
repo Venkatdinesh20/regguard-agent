@@ -1,9 +1,10 @@
 """Argument schemas for every tool an agent may call.
 
 An LLM chooses tool arguments, which means tool arguments are untrusted input.
-Each tool therefore declares an explicit Pydantic ``args_schema``: a malformed
-or out-of-range argument is rejected before the tool body runs, and the model
-receives a validation error it can correct on the next turn.
+Every tool that takes arguments therefore declares an explicit Pydantic
+``args_schema``: a malformed or out-of-range argument is rejected before the tool
+body runs, and the model receives a validation error it can correct on the next
+turn. (The three no-argument tools need no schema.)
 """
 
 from __future__ import annotations

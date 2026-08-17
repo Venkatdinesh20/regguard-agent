@@ -41,7 +41,7 @@ queue.
 
 ## 3. State design
 
-`app/graph/state.py`. Three of the channels are reducers (`Annotated[list[...], operator.add]`):
+`app/graph/state.py`. Four of the channels are reducers (`Annotated[list[...], operator.add]`):
 
 | Channel | Kind | Purpose |
 |---|---|---|
@@ -68,7 +68,7 @@ POST /investigations
    │
    ├─ intake                deterministic; resolves customer_id by regex
    │
-   ├─ supervisor  step 1    LLM → RouteDecision(CUSTOMER, "no profile yet", 0.9)
+   ├─ supervisor  step 1    LLM → RouteDecision(CUSTOMER, "no profile yet", 0.85)
    │                        guardrails: pass
    ├─ customer              bind_tools → get_customer_profile(C001)
    │                        → with_structured_output(Finding) → appended
@@ -78,6 +78,7 @@ POST /investigations
    │
    ├─ supervisor  step 3    LLM → FRAUD          (redirected if no transaction evidence)
    ├─ fraud                 score_fraud_risk → 65/100 HIGH, rules R01/R02/R04
+   │                        (R01 and R08 also carry a HIGH escalation floor)
    │
    ├─ supervisor  step 4    LLM → POLICY
    ├─ policy                search_policy("structuring cash deposit threshold …")
@@ -109,9 +110,11 @@ Three kinds of untrusted input, three defences:
    windows are rejected at the HTTP edge (422) before any spend.
 2. **LLM routing output** → `RouteDecision` validation *and* `apply_guardrails`. A hallucinated route
    cannot parse; a legal-but-unwise route is overridden and the override is logged.
-3. **LLM tool arguments** → every tool declares an explicit `args_schema` (`app/schemas/tool_args.py`).
-   An out-of-range `lookback_days` or a missing `customer_id` becomes an error `ToolMessage` the model
-   can correct, not an exception that kills the graph.
+3. **LLM tool arguments** → every tool that takes arguments declares an explicit `args_schema`
+   (`app/schemas/tool_args.py`; the three no-argument tools need none). An out-of-range
+   `lookback_days` or a missing `customer_id` becomes an error `ToolMessage` the model can correct,
+   not an exception that kills the graph. Arguments the model failed to serialise at all arrive in
+   `invalid_tool_calls` and are answered too, so the message history stays valid for the next call.
 
 Tool failures are converted, never raised: unknown tool, invalid arguments, domain error
 (`RecordNotFoundError`) and unexpected exception all return an error message the agent can react to —
@@ -126,14 +129,20 @@ A compliance system has to answer "could the model have made this number up?" wi
 * The **risk score** is a versioned rule engine (`RULES_VERSION`), with weights, thresholds, and the
   specific transactions that triggered each rule. Deterministic, reproducible, back-testable. The
   fraud agent's prompt forbids adjusting it and its value is that it *explains* the rules.
+* Some rules carry a **mandatory escalation floor** (`RuleHit.min_level`) instead of relying on their
+  weight: a sanctions match scores 50 where HIGH begins at 60, and reporting it is an obligation, not
+  a judgement. Floors move the level up only, and the rules that applied are reported in
+  `escalated_by`. Expressing a hard obligation as additive weight is a modelling error — arithmetic
+  elsewhere in the case could dilute it below the gate.
 * The **headline risk level** is `max(finding.assessed_risk)`, computed in code.
 * `requires_sar_filing` can be escalated by code but never de-escalated by the model.
 * The **report's** `case_id`, `customer_id` and `risk_level` are overwritten from state after
   generation, so the writer cannot restate provenance incorrectly.
 * **Approval necessity** is a governance rule, not a model output.
 
-Temperature is pinned to `0.0` for routing: a control-flow decision should be reproducible given the
-same evidence.
+Temperature defaults to `0.0` and applies to every call the system makes (`LLM_TEMPERATURE`,
+`app/core/llm.py`): a control-flow decision should be reproducible given the same evidence, and a
+report should not be creative.
 
 ---
 
@@ -143,22 +152,27 @@ same evidence.
 |---|---|
 | Provider timeout / 5xx | `timeout` + `max_retries` on the client (`app/core/llm.py`) |
 | Malformed structured output | one corrective retry, then a degraded valid object; investigation continues |
+| Provider returns *no* object (refusal / plain text) | treated as a schema failure: the supervisor degrades to `FINISH` at confidence `0.0`, a specialist yields a `Finding` marked incomplete |
+| Tool call with unparsable arguments | answered with an error `ToolMessage` bound to the same call id, then the loop continues |
 | Model routes in a loop | visit cap → forced `FINISH`, event recorded |
-| Model never finishes | step budget → forced `FINISH`; LangGraph `recursion_limit` as a second net |
+| Model never finishes | step budget, checked *before* the routing call → forced `FINISH` with no wasted spend; LangGraph `recursion_limit` as a second net |
 | Model asks for a nonexistent tool | error `ToolMessage` listing the available tools |
 | Tool returns a huge payload | truncated at 8 000 characters before it reaches the context window |
 | Unknown customer | domain error surfaced to the agent with the list of valid IDs |
 | Out-of-scope query | supervisor finishes in one step; zero tool calls, zero spend |
 | Missing credentials | startup `ValidationError` naming the variable, not a mid-investigation crash |
 | Malformed approval payload | rejected and recorded as *not approved* |
+| Approval for a case that is not paused (or a second approval) | `InvestigationNotPausedError` → `409`; the decision is never silently dropped |
+| A thread reused for a second case | `ThreadAlreadyUsedError` → `409`, because append-only channels would mix the evidence |
 
 ---
 
 ## 8. Extending it
 
 * **New specialist**: add a route to `AgentRoute`, a prompt to `prompts.py`, tools to `app/tools/`, an
-  entry to `SPECIALISTS`, a node function, and one line in `SPECIALIST_NODES`. The supervisor prompt
-  is the only other place that needs to learn it exists.
+  entry to `SPECIALISTS`, a node function, then two lines in `app/graph/build.py` — a
+  `builder.add_node(...)` and a `SPECIALIST_NODES` entry. The supervisor prompt is the only other
+  place that needs to learn it exists.
 * **New tool for an existing specialist**: add the function, an `args_schema`, and append it to that
   specialist's tool list. Tool order matters only to the deterministic stub, which calls the first.
 * **New guardrail**: add a branch to `apply_guardrails` and a test to `test_guardrails.py`. Guardrails
@@ -170,9 +184,10 @@ same evidence.
 
 * The graph is stateless per request; state lives in the checkpointer. Swap `MemorySaver` for the
   Postgres saver and the service scales horizontally, with paused cases resumable by any worker.
-* Cost is bounded per case by `MAX_SUPERVISOR_STEPS` × (1 routing call + `MAX_TOOL_ITERATIONS` tool
-  rounds + 1 summarisation) + 1 report call. That ceiling is configuration, so it can be tuned per
-  environment and enforced in review.
+* Cost is bounded per case by at most `MAX_SUPERVISOR_STEPS` routing calls (the budget is checked
+  before the call, so the limit is never exceeded and never wasted) plus, per specialist, up to
+  `MAX_TOOL_ITERATIONS` tool rounds and 2 summarisation calls (one corrective retry), plus 1 report
+  call. That ceiling is configuration, so it can be tuned per environment and enforced in review.
 * Every log line is JSON and carries `case_id` via a `ContextVar`, so an investigation is one query in
   a log store. The natural next step is OpenTelemetry spans per node plus LangSmith traces.
 * Long investigations should move to a queue: `POST /investigations` enqueues, the graph runs in a

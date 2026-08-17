@@ -5,7 +5,7 @@ install:            ## create the virtualenv and install everything
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e ".[dev]"
 
-demo:               ## run the four demo investigations (no API key needed)
+demo:               ## run the five demo investigations (no API key needed)
 	.venv/bin/python -m app.main
 
 test:               ## run the test suite with coverage

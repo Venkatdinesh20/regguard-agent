@@ -2,10 +2,10 @@
 
 Two properties matter for a compliance system:
 
-1. **Append-only evidence.** ``findings``, ``route_history`` and ``decisions``
-   are reducer channels: a node returns only what it adds, and LangGraph merges.
-   No node can quietly overwrite another's evidence, and the full sequence of
-   decisions survives into the audit trail.
+1. **Append-only evidence.** ``findings``, ``route_history``, ``decisions`` and
+   ``guardrail_events`` are reducer channels: a node returns only what it adds,
+   and LangGraph merges. No node can quietly overwrite another's evidence, and
+   the full sequence of decisions survives into the audit trail.
 2. **Everything needed to explain the outcome lives in state.** Given a final
    state you can reconstruct which specialist ran, why the supervisor chose it,
    what it found, and who approved the result.

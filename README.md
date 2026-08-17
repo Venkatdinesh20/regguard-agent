@@ -2,7 +2,7 @@
 
 **A multi-agent financial-crime investigation system whose control flow is decided by an LLM.**
 
-Python 3.11+ · LangGraph · LangChain · FastAPI · Pydantic · 105 tests · 95% coverage · runs with no API key
+Python 3.11+ · LangGraph · LangChain · FastAPI · Pydantic · 118 tests · 96% coverage · runs with no API key
 
 ---
 
@@ -35,7 +35,7 @@ model's decision on this case, recorded with its reasoning, and it changes with 
 | An agent that automates a problem in a chosen field | AML / financial-crime alert triage — `app/agents/`, `app/tools/` |
 | **Control flow decided by the LLM** | `app/agents/supervisor.py` emits a validated `RouteDecision`; `app/graph/build.py` dispatches on it via conditional edges |
 | Multi-agent architecture | LangGraph supervisor pattern: 1 supervisor + 4 tool-owning specialists + reporter — `app/agents/specialists.py` |
-| Production ready | Typed config, structured audit logging, guardrails, error handling, human-in-the-loop, FastAPI service, 105 tests, mypy, ruff, Docker, CI |
+| Production ready | Typed config, structured audit logging, guardrails, error handling, human-in-the-loop, FastAPI service, 118 tests, mypy, ruff, Docker, CI |
 
 ---
 
@@ -52,7 +52,7 @@ python -m venv .venv
 pip install -e ".[dev]"
 
 python -m app.main                 # five demo investigations, end to end
-pytest                             # 105 tests
+pytest                             # 118 tests
 ```
 
 The default provider is a deterministic in-process model (`LLM_PROVIDER=stub`,
@@ -92,8 +92,10 @@ Then `python -m app.main` again. No code changes — provider is configuration
 ### As a service
 
 ```bash
-uvicorn app.api:app --reload      # http://localhost:8000/docs
-docker build -t regguard . && docker run -p 8000:8000 --env-file .env regguard
+uvicorn app.api:app --reload                          # http://localhost:8000/docs
+docker build -t regguard . && docker run -p 8000:8000 regguard
+# once you have a .env with real credentials:
+# docker run -p 8000:8000 --env-file .env regguard
 ```
 
 ---
@@ -157,13 +159,17 @@ override is recorded, never silent.
 
 | Guardrail | Why | Effect |
 |---|---|---|
-| Step budget (`MAX_SUPERVISOR_STEPS`) | An investigation may not run — or bill — forever | Forces `FINISH`, records `STEP_BUDGET_EXHAUSTED` |
+| Step budget (`MAX_SUPERVISOR_STEPS`) | An investigation may not run — or bill — forever | Finishes **without spending another routing call**, records `STEP_BUDGET_EXHAUSTED` |
 | Evidence ordering | A risk score with no activity data is not defensible to a regulator | `FRAUD` before `TRANSACTION` is redirected, records `ORDERING_VIOLATION` |
 | Loop protection (`MAX_VISITS_PER_AGENT`) | Re-running an expensive specialist is a classic agent failure | Forces `FINISH`, records `LOOP_DETECTED` |
 | Tool iteration cap | One specialist must not spin on its tools | Loop exits, warning logged |
 | Unknown route fallback | Defence in depth if a state channel is corrupted | Routes to `FINISH` |
 | Schema failure fallback | A malformed decision must not dispatch blindly | Stops with confidence `0.0` and a recorded reason |
-| Provenance assertion | A specialist may not claim to be another specialist | Graph overwrites `finding.agent` |
+| Provenance assertion | A specialist may not claim to be another specialist | The runner re-asserts `finding.agent` (`app/agents/base.py`) |
+| Unanswered tool calls | A provider rejects an assistant tool call with no tool result, and the specialist would gather nothing | Arguments the model failed to serialise get an error `ToolMessage` too (`invalid_tool_call_message`) |
+| Mandatory escalation | A sanctions match scores 50 of the 60 needed for HIGH — an obligation must not be diluted by arithmetic | `R01` and `R08` carry a `min_level` floor of HIGH, reported in `escalated_by` |
+| One thread, one case | Append-only channels mean thread reuse would report case B on case A's evidence | `ThreadAlreadyUsedError` → HTTP 409 |
+| Approval integrity | A reviewer must never be told a decision was recorded when it was discarded | Approving a case that is not paused → `409 Conflict`, not a silent 200 |
 
 ---
 
@@ -220,7 +226,7 @@ This is the part that matters in a regulated domain.
 | The risk score | Deterministic rule engine, `app/tools/fraud.py` (10 versioned rules, weights, evidence per rule) | A model-generated number cannot be reproduced, back-tested or defended to an auditor. Same evidence → same score, every time |
 | The case's headline risk level | Computed as the maximum risk any specialist evidenced | Reproducible from the evidence, not from the writer's impression |
 | Whether a human must approve | Governance rule in `needs_human_approval` | A model may not opt out of oversight |
-| Which specialist a finding came from | The graph | Provenance is asserted, not claimed |
+| Which specialist a finding came from | Framework code in `app/agents/base.py` | Provenance is asserted, not claimed |
 | Resolving the customer identifier | Regex in `intake_node` | A parsing problem, not a reasoning problem — cheaper, and it cannot hallucinate |
 
 The LLM decides **orchestration and explanation**. Deterministic code decides **measurement and
@@ -255,7 +261,9 @@ curl -sX POST localhost:8000/investigations/<thread_id>/approval \
   "decisions": [{"next_agent": "CUSTOMER", "reasoning": "...", "confidence": 0.85}, "..."],
   "guardrail_events": [],
   "report": {"requires_sar_filing": true, "recommended_actions": ["..."]},
-  "pending_approval": {"question": "Authorise this recommendation?", "requires_sar_filing": true}
+  "pending_approval": {"type": "approval_required", "requires_sar_filing": true,
+                       "question": "Authorise this recommendation? Respond with approved, approver and optional notes.",
+                       "summary": "...", "recommended_actions": ["..."]}
 }
 ```
 
@@ -266,7 +274,7 @@ curl -sX POST localhost:8000/investigations/<thread_id>/approval \
 | `GET` | `/health` | liveness and effective configuration |
 | `POST` | `/investigations` | run an investigation → `200` complete, `202` awaiting authorisation |
 | `GET` | `/investigations/{thread_id}` | current state and full audit trail |
-| `POST` | `/investigations/{thread_id}/approval` | record a human decision and resume |
+| `POST` | `/investigations/{thread_id}/approval` | record a human decision and resume — `409` if the case is not awaiting one |
 
 OpenAPI docs at `/docs`.
 
@@ -275,8 +283,8 @@ OpenAPI docs at `/docs`.
 ## Testing
 
 ```bash
-pytest                                          # 105 tests, ~7s, no network
-pytest --cov=app --cov-report=term-missing      # 95%
+pytest                                          # 118 tests, ~9s, no network
+pytest --cov=app --cov-report=term-missing      # 96%
 ruff check . && ruff format --check . && mypy app tests
 ```
 
@@ -290,9 +298,11 @@ ruff check . && ruff format --check . && mypy app tests
 | `test_api.py` | HTTP contract, 422s, the 202 → approve → 200 lifecycle |
 | `test_config_and_llm.py` | startup validation, and that all three providers construct the interface the agents use |
 | `test_cli_and_logging.py` | CLI output, JSON audit records, correlation IDs |
+| `test_regressions.py` | one test per defect found in review: score monotonicity, mandatory escalation floors, a provider returning no structured object, unparsable tool arguments, double approval, thread reuse, and that the step budget costs no wasted model call |
 
-CI (`.github/workflows/ci.yml`) runs lint, format, types, tests with an 85% coverage floor, an
-end-to-end agent run, and a Docker build with a live health check — on Python 3.11 and 3.12.
+CI (`.github/workflows/ci.yml`) runs two jobs: **quality** on Python 3.11 and 3.12 (lint, format,
+types, tests with an 85% coverage floor, plus an end-to-end agent run), and **docker**, which builds
+the image and waits for the container's `/health` to answer.
 
 ---
 
@@ -307,7 +317,7 @@ app/
   graph/      state channels · graph assembly
   data/       synthetic customers, transactions, policy corpus
   api.py      FastAPI service      main.py  CLI      service.py  application boundary
-tests/        105 tests
+tests/        118 tests, including test_regressions.py
 ```
 
 `app/agents/prompts.py` holds every prompt in one file: prompts are behaviour, so they are reviewed

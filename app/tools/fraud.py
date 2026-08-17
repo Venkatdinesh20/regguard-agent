@@ -50,12 +50,19 @@ NEW_ACCOUNT_DAYS = 180
 
 @dataclass
 class RuleHit:
-    """One triggered rule, with the evidence that triggered it."""
+    """One triggered rule, with the evidence that triggered it.
+
+    ``min_level`` expresses a *mandatory escalation*: some findings are an
+    obligation rather than a contribution to a score. A sanctions match must
+    reach a human regardless of what else the account did, so it cannot be
+    modelled as additive weight that a low total could dilute.
+    """
 
     rule_id: str
     description: str
     weight: int
     evidence: list[str] = field(default_factory=list)
+    min_level: RiskLevel | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,6 +70,7 @@ class RuleHit:
             "description": self.description,
             "weight": self.weight,
             "evidence": self.evidence,
+            "min_level": self.min_level.value if self.min_level else None,
         }
 
 
@@ -119,16 +127,22 @@ def score_customer_risk(customer_id: str, lookback_days: int = 30) -> dict[str, 
                     f"({item.counterparty})"
                     for item in biggest
                 ],
+                # POL-STR-001: suspected structuring must be escalated for
+                # suspicious transaction reporting regardless of the amounts.
+                min_level=RiskLevel.HIGH,
             )
         )
 
     # R02 — aggregation: sub-threshold deposits that sum above it in one day.
-    daily_groups = _windowed_groups(cash_credits, AGGREGATION_WINDOW, 2)
+    # Only sub-threshold deposits are grouped: one reportable deposit in the same
+    # window must not mask the pattern, or adding cash could lower the score.
+    sub_threshold_cash = [
+        item for item in cash_credits if item.amount < REPORTING_THRESHOLD
+    ]
+    daily_groups = _windowed_groups(sub_threshold_cash, AGGREGATION_WINDOW, 2)
     for group in daily_groups:
         total = sum(item.amount for item in group)
-        if total >= REPORTING_THRESHOLD and all(
-            item.amount < REPORTING_THRESHOLD for item in group
-        ):
+        if total >= REPORTING_THRESHOLD:
             hits.append(
                 RuleHit(
                     "R02_THRESHOLD_AGGREGATION",
@@ -269,6 +283,8 @@ def score_customer_risk(customer_id: str, lookback_days: int = 30) -> dict[str, 
                 "Customer matches a sanctions list entry.",
                 50,
                 [profile.customer_id],
+                # A sanctions match is never auto-released, whatever the score.
+                min_level=RiskLevel.HIGH,
             )
         )
     if profile.pep_flag:
@@ -300,12 +316,23 @@ def score_customer_risk(customer_id: str, lookback_days: int = 30) -> dict[str, 
     else:
         level = RiskLevel.LOW
 
+    # Mandatory escalations move the level upwards only, never down.
+    floors = [hit.min_level for hit in hits if hit.min_level is not None]
+    escalated_by = [
+        hit.rule_id
+        for hit in hits
+        if hit.min_level is not None and hit.min_level.rank > level.rank
+    ]
+    if escalated_by:
+        level = max([level, *floors], key=lambda risk: risk.rank)
+
     logger.info(
         "fraud.scored",
         extra={
             "customer_id": customer_id,
             "risk_score": score,
             "risk_level": level.value,
+            "escalated_by": escalated_by,
             "rules_triggered": [hit.rule_id for hit in hits],
         },
     )
@@ -319,6 +346,7 @@ def score_customer_risk(customer_id: str, lookback_days: int = 30) -> dict[str, 
         "risk_level": level.value,
         "thresholds": {"HIGH": HIGH_RISK_SCORE, "MEDIUM": MEDIUM_RISK_SCORE},
         "triggered_rules": [hit.to_dict() for hit in hits],
+        "escalated_by": escalated_by,
         "clean": not hits,
     }
 
@@ -332,15 +360,20 @@ def _rule_catalogue() -> dict[str, Any]:
             f"score >= {HIGH_RISK_SCORE} is HIGH, "
             f">= {MEDIUM_RISK_SCORE} is MEDIUM, otherwise LOW."
         ),
+        "escalation_floors": (
+            "R01_STRUCTURING and R08_SANCTIONS_HIT always escalate the case to "
+            "HIGH regardless of the total score, because reporting them is an "
+            "obligation rather than a judgement."
+        ),
         "rules": [
-            {"rule_id": "R01_STRUCTURING", "weight": 40},
+            {"rule_id": "R01_STRUCTURING", "weight": 40, "min_level": "HIGH"},
             {"rule_id": "R02_THRESHOLD_AGGREGATION", "weight": 15},
             {"rule_id": "R03_PASS_THROUGH", "weight": 30},
             {"rule_id": "R04_HIGH_RISK_GEOGRAPHY", "weight": "10 per country, max 20"},
             {"rule_id": "R05_BASELINE_ANOMALY", "weight": 25},
             {"rule_id": "R06_RAPID_DISPERSAL", "weight": 20},
             {"rule_id": "R07_NEW_ACCOUNT_LARGE_WIRES", "weight": 15},
-            {"rule_id": "R08_SANCTIONS_HIT", "weight": 50},
+            {"rule_id": "R08_SANCTIONS_HIT", "weight": 50, "min_level": "HIGH"},
             {"rule_id": "R09_PEP", "weight": 10},
             {"rule_id": "R10_KYC_NOT_VERIFIED", "weight": 10},
         ],

@@ -27,13 +27,31 @@ class TestCli:
         assert "Control flow chosen by the LLM supervisor" in output
         assert "Risk level: LOW" in output
 
-    def test_high_risk_run_pauses_then_shows_the_human_decision(self, capsys):
+    def test_high_risk_run_stops_at_the_authorisation_gate_by_default(self, capsys):
+        """Without --auto-approve the CLI must not simulate a human."""
         main(["--case-id", "CASE-CLI-2", "--customer", "C001", "--lookback-days", "60"])
         output = capsys.readouterr().out
 
         assert "PAUSED FOR HUMAN AUTHORISATION" in output
-        assert "Human decision: APPROVED" in output
         assert "R01_STRUCTURING" in output
+        assert "Human decision" not in output
+
+    def test_auto_approve_simulates_the_reviewer_and_completes_the_case(self, capsys):
+        main(
+            [
+                "--case-id",
+                "CASE-CLI-2b",
+                "--customer",
+                "C001",
+                "--lookback-days",
+                "60",
+                "--auto-approve",
+            ]
+        )
+        output = capsys.readouterr().out
+
+        assert "PAUSED FOR HUMAN AUTHORISATION" in output
+        assert "Human decision: APPROVED" in output
 
     def test_free_text_query_is_accepted(self, capsys):
         exit_code = main(

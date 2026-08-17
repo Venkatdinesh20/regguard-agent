@@ -113,7 +113,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--auto-approve",
         action="store_true",
         help="Simulate a human reviewer approving any paused investigation. "
-        "Demo convenience only — never a production behaviour.",
+        "Demo convenience only — never a production behaviour. Without it, a "
+        "HIGH-risk case stops at the authorisation gate, as it should.",
     )
     return parser.parse_args(argv)
 
@@ -168,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             query,
             args.customer,
             args.lookback_days,
-            args.auto_approve or True,
+            args.auto_approve,
         )
         return 0
 

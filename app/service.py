@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
+from app.core.exceptions import InvestigationNotPausedError, ThreadAlreadyUsedError
 from app.core.logging import case_context, get_logger
 from app.graph.build import get_graph
 from app.graph.state import initial_state
@@ -66,12 +67,23 @@ def _config(thread_id: str) -> dict[str, Any]:
 
 
 def _pending_interrupt(result: dict[str, Any]) -> dict[str, Any] | None:
+    """The interrupt payload from an invoke result, if the graph paused."""
     interrupts = result.get("__interrupt__") or []
     if not interrupts:
         return None
     first = interrupts[0]
     value = getattr(first, "value", first)
     return value if isinstance(value, dict) else {"payload": value}
+
+
+def _pending_from_snapshot(snapshot: Any) -> dict[str, Any] | None:
+    """The interrupt payload from a persisted checkpoint, if one is pending."""
+    for task in snapshot.tasks or ():
+        for task_interrupt in getattr(task, "interrupts", ()) or ():
+            value = getattr(task_interrupt, "value", None)
+            if isinstance(value, dict):
+                return value
+    return None
 
 
 def _to_outcome(
@@ -107,6 +119,15 @@ def run_investigation(
     """Run an investigation to completion, or until it pauses for a human."""
     thread = thread_id or f"{request.case_id}-{uuid.uuid4().hex[:8]}"
     graph = get_graph()
+
+    # Evidence channels are append-only, so a thread may host exactly one
+    # investigation. Reusing one would let a case be reported on another case's
+    # findings — a silent, high-consequence failure.
+    if thread_id is not None and graph.get_state(_config(thread)).values:
+        raise ThreadAlreadyUsedError(
+            f"thread_id '{thread}' already holds an investigation. Start a new "
+            "investigation without a thread_id, or resume the existing one."
+        )
 
     with case_context(request.case_id):
         logger.info(
@@ -148,6 +169,13 @@ def resume_investigation(
     if not snapshot.values:
         raise KeyError(f"No investigation found for thread_id '{thread_id}'")
 
+    if _pending_from_snapshot(snapshot) is None:
+        raise InvestigationNotPausedError(
+            f"Investigation '{thread_id}' is not awaiting authorisation "
+            f"(status={snapshot.values.get('status', 'unknown')}). The decision "
+            "was not recorded."
+        )
+
     case_id = snapshot.values.get("case_id", "UNKNOWN")
     with case_context(case_id):
         logger.info(
@@ -173,13 +201,7 @@ def get_investigation(thread_id: str) -> InvestigationOutcome:
         raise KeyError(f"No investigation found for thread_id '{thread_id}'")
 
     values = dict(snapshot.values)
-    pending: dict[str, Any] | None = None
-    for task in snapshot.tasks or ():
-        for task_interrupt in getattr(task, "interrupts", ()) or ():
-            value = getattr(task_interrupt, "value", None)
-            if isinstance(value, dict):
-                pending = value
-                break
+    pending = _pending_from_snapshot(snapshot)
     if pending:
         values["__interrupt__"] = [type("I", (), {"value": pending})()]
 

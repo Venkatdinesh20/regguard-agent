@@ -45,6 +45,12 @@ def _ask_llm(state: InvestigationState) -> RouteDecision:
                 HumanMessage(content=supervisor_context(state)),
             ]
         )
+        if decision is None:
+            # Providers return None when the model answered without using the
+            # structured-output tool (e.g. a refusal or a plain-text reply).
+            raise ValueError("the routing model returned no structured object")
+        if not isinstance(decision, RouteDecision):
+            decision = RouteDecision.model_validate(decision)
     except (ValidationError, ValueError) as exc:
         logger.error("supervisor.invalid_decision", extra={"error": str(exc)})
         return RouteDecision(
@@ -55,8 +61,6 @@ def _ask_llm(state: InvestigationState) -> RouteDecision:
             ),
             confidence=FALLBACK_CONFIDENCE,
         )
-    if not isinstance(decision, RouteDecision):  # pragma: no cover - provider guard
-        decision = RouteDecision.model_validate(decision)
     return decision
 
 
@@ -129,7 +133,32 @@ def _override(
 
 def supervisor_node(state: InvestigationState) -> dict[str, Any]:
     """Graph node: decide the next step and record why."""
+    settings = get_settings()
     step_count = state.get("step_count", 0) + 1
+
+    if step_count > settings.max_supervisor_steps:
+        # Checked *before* the model call: the outcome is already determined, so
+        # paying for a routing decision we would discard is pure waste. The same
+        # rule also lives in apply_guardrails as defence in depth.
+        event = (
+            f"STEP_BUDGET_EXHAUSTED: step {step_count} would exceed the limit "
+            f"of {settings.max_supervisor_steps}; finishing without another "
+            "model call."
+        )
+        logger.warning("guardrail.step_budget", extra={"step": step_count})
+        return {
+            "next_agent": AgentRoute.FINISH.value,
+            "decisions": [
+                RouteDecision(
+                    next_agent=AgentRoute.FINISH,
+                    reasoning=f"[guardrail override] {event}",
+                    confidence=FALLBACK_CONFIDENCE,
+                )
+            ],
+            "step_count": step_count,
+            "guardrail_events": [event],
+        }
+
     decision = _ask_llm(state)
     final_decision, events = apply_guardrails(
         decision, {**state, "step_count": step_count}

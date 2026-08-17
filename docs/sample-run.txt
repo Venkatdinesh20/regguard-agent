@@ -49,7 +49,7 @@ Regulatory considerations:
 
 *** PAUSED FOR HUMAN AUTHORISATION ***
   Authorise this recommendation? Respond with approved, approver and optional notes.
-  thread_id=CASE-1001-20719c10
+  thread_id=CASE-1001-1878e265
 
 >>> simulating human authorisation
 
@@ -192,7 +192,7 @@ Regulatory considerations:
 
 *** PAUSED FOR HUMAN AUTHORISATION ***
   Authorise this recommendation? Respond with approved, approver and optional notes.
-  thread_id=CASE-1003-4141d28e
+  thread_id=CASE-1003-d17fe4ae
 
 >>> simulating human authorisation
 

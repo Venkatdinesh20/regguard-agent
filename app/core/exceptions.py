@@ -34,3 +34,19 @@ class GuardrailViolation(RegGuardError):
 
 class RecordNotFoundError(RegGuardError):
     """A requested customer or record does not exist in the source system."""
+
+
+class InvestigationNotPausedError(RegGuardError):
+    """An approval was submitted for an investigation that is not awaiting one.
+
+    Silently accepting it would tell a reviewer their authorisation was recorded
+    when it was discarded — unacceptable in an approval workflow.
+    """
+
+
+class ThreadAlreadyUsedError(RegGuardError):
+    """A caller tried to start a new investigation on an existing thread.
+
+    State channels are append-only, so reusing a thread would mix two cases'
+    evidence and let one case be reported on another's findings.
+    """

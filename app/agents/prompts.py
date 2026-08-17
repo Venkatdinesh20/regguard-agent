@@ -107,6 +107,13 @@ filed or that an account has been frozen: those actions require human \
 authorisation and have not happened."""
 
 
+SCHEMA_RETRY_INSTRUCTION = """Your previous response did not satisfy the \
+required schema ({error}).
+
+Respond again, obeying every field constraint exactly. Do not add commentary \
+outside the structured object."""
+
+
 SUMMARISE_INSTRUCTION = """Summarise the evidence you have gathered as a single \
 structured finding.
 

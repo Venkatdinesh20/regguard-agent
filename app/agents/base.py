@@ -21,7 +21,7 @@ from langchain_core.messages import (
 from langchain_core.tools import BaseTool
 from pydantic import ValidationError
 
-from app.agents.prompts import SUMMARISE_INSTRUCTION
+from app.agents.prompts import SCHEMA_RETRY_INSTRUCTION, SUMMARISE_INSTRUCTION
 from app.core.config import get_settings
 from app.core.exceptions import RegGuardError
 from app.core.llm import get_chat_model
@@ -40,7 +40,7 @@ not blow the context window or the token bill."""
 def _serialise(result: Any) -> str:
     text = result if isinstance(result, str) else json.dumps(result, default=str)
     if len(text) > MAX_TOOL_RESULT_CHARS:
-        return text[:MAX_TOOL_RESULT_CHARS] + '... [truncated]"'
+        return text[:MAX_TOOL_RESULT_CHARS] + "... [truncated]"
     return text
 
 
@@ -101,6 +101,31 @@ def execute_tool_call(
     return ToolMessage(content=_serialise(result), tool_call_id=call_id)
 
 
+def invalid_tool_call_message(invalid_call: dict[str, Any]) -> ToolMessage:
+    """Answer a tool call whose arguments the model failed to serialise.
+
+    Real providers surface these in ``invalid_tool_calls`` rather than
+    ``tool_calls``. Ignoring them would leave an assistant tool-call message with
+    no matching tool result, which OpenAI and Anthropic both reject on the next
+    request — and the specialist would silently gather no evidence.
+    """
+    name = invalid_call.get("name") or "unknown_tool"
+    call_id = invalid_call.get("id") or f"call_{name}"
+    logger.warning(
+        "tool.unparsable_arguments",
+        extra={"tool": name, "error": invalid_call.get("error")},
+    )
+    return ToolMessage(
+        content=(
+            f"Error: the arguments you supplied for '{name}' were not valid "
+            f"JSON ({invalid_call.get('error')}). Call the tool again with "
+            "valid JSON arguments."
+        ),
+        tool_call_id=call_id,
+        status="error",
+    )
+
+
 def run_specialist(
     route: AgentRoute,
     system_prompt: str,
@@ -126,14 +151,19 @@ def run_specialist(
         response = bound.invoke(messages)
         messages.append(response)
         tool_calls = list(getattr(response, "tool_calls", None) or [])
+        invalid_calls = list(getattr(response, "invalid_tool_calls", None) or [])
 
-        if not tool_calls:
+        if not tool_calls and not invalid_calls:
             completed = True
             break
 
         for tool_call in tool_calls:
             used_tools.append(tool_call.get("name", "?"))
             messages.append(execute_tool_call(tools_by_name, tool_call))
+
+        # Every tool call must be answered, including the unparsable ones.
+        for invalid_call in invalid_calls:
+            messages.append(invalid_tool_call_message(invalid_call))
 
         logger.info(
             "specialist.tool_round",
@@ -176,6 +206,12 @@ def _summarise(
     for attempt in (1, 2):
         try:
             finding = summariser.invoke(prompt)
+            if finding is None:
+                # Providers return None when the model answered without using
+                # the structured-output tool (e.g. a refusal).
+                raise ValueError("the model returned no structured object")
+            if not isinstance(finding, Finding):
+                finding = Finding.model_validate(finding)
         except (ValidationError, ValueError) as exc:
             logger.warning(
                 "specialist.structured_output_failed",
@@ -183,18 +219,9 @@ def _summarise(
             )
             prompt = [
                 *prompt,
-                HumanMessage(
-                    content=(
-                        "Your previous response did not satisfy the required "
-                        f"schema ({exc}). Respond again, obeying every field "
-                        "constraint exactly."
-                    )
-                ),
+                HumanMessage(content=SCHEMA_RETRY_INSTRUCTION.format(error=exc)),
             ]
             continue
-
-        if not isinstance(finding, Finding):  # pragma: no cover - provider guard
-            finding = Finding.model_validate(finding)
 
         # Provenance is asserted by the graph, never by the model: a specialist
         # cannot claim to be a different specialist.

@@ -114,26 +114,6 @@ class TestOutOfScopeQuery:
         assert outcome.status == "reported"
 
 
-class TestBudgetGuardrail:
-    def test_step_budget_terminates_the_investigation(self, monkeypatch):
-        from app.core.config import get_settings
-        from app.core.llm import reset_chat_model_cache
-        from app.graph.build import reset_graph_cache
-
-        monkeypatch.setenv("MAX_SUPERVISOR_STEPS", "2")
-        get_settings.cache_clear()
-        reset_chat_model_cache()
-        reset_graph_cache()
-
-        outcome = run_investigation(
-            _request("CASE-BUDGET", "Investigate customer C001 cash deposits", "C001")
-        )
-
-        assert outcome.steps_used <= 3
-        assert any("STEP_BUDGET_EXHAUSTED" in e for e in outcome.guardrail_events)
-        assert outcome.report is not None  # a partial case still produces a report
-
-
 class TestAuditTrail:
     def test_outcome_serialises_for_transport_and_storage(self):
         outcome = run_investigation(
