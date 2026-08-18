@@ -19,10 +19,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings
@@ -154,6 +156,18 @@ app = FastAPI(
     ),
     lifespan=lifespan,
 )
+
+
+# Resolve the static directory relative to this file so the app works
+# regardless of the working directory it is launched from.
+_STATIC_DIR = Path(__file__).parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/ui", StaticFiles(directory=_STATIC_DIR, html=True), name="ui")
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/ui/index.html")
 
 
 @app.exception_handler(RegGuardError)

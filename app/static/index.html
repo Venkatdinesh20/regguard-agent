@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RegGuard — AML Investigation Console</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --accent:    #2f81f7;
+      --accent-dim:#1a4f9c;
+      --text:      #e6edf3;
+      --muted:     #7d8590;
+      --low:       #3fb950;
+      --medium:    #d29922;
+      --high:      #f85149;
+      --approved:  #3fb950;
+      --rejected:  #f85149;
+      --waiting:   #d29922;
+      --radius:    8px;
+      --mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #2f81f7 0%, #1a4f9c 100%);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .logo-text { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo-sub  { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; }
+    .header-pill {
+      margin-left: auto;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--low); box-shadow: 0 0 6px var(--low);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── LAYOUT ── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── SIDEBAR ── */
+    aside {
+      width: 300px; min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar-section { padding: 20px; border-bottom: 1px solid var(--border); }
+    .sidebar-section h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+
+    .demo-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .demo-card:hover { border-color: var(--accent); background: #1c2230; }
+    .demo-card.active { border-color: var(--accent); background: #1c2230; }
+    .demo-card-id   { font-size: 11px; font-family: var(--mono); color: var(--accent); margin-bottom: 4px; }
+    .demo-card-desc { font-size: 13px; color: var(--text); line-height: 1.4; margin-bottom: 6px; }
+    .demo-card-meta { font-size: 11px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+    .tag {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .tag.high   { border-color: var(--high);   color: var(--high);   background: rgba(248,81,73,.1); }
+    .tag.medium { border-color: var(--medium); color: var(--medium); background: rgba(210,153,34,.1); }
+    .tag.low    { border-color: var(--low);    color: var(--low);    background: rgba(63,185,80,.1); }
+    .tag.oos    { border-color: var(--muted);  color: var(--muted);  background: rgba(125,133,144,.1); }
+
+    /* ── CONTENT ── */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 28px;
+      gap: 24px;
+    }
+
+    /* ── FORM CARD ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card-header h2 { font-size: 15px; font-weight: 600; }
+    .card-header .subtitle { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .card-body { padding: 20px; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    input, select, textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color .15s;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+    select option { background: var(--surface2); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 18px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .88; }
+    .btn-primary:disabled { opacity: .45; cursor: default; }
+    .btn-success { background: var(--low); color: #000; }
+    .btn-danger  { background: var(--high); color: #fff; }
+    .btn-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--accent); }
+    .btn-row { display: flex; gap: 10px; margin-top: 16px; align-items: center; }
+
+    /* ── SPINNER ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── RESULTS ── */
+    .result-header {
+      display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-id { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+    .result-thread { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .risk-badge {
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+    .risk-HIGH   { background: rgba(248,81,73,.15); color: var(--high);   border: 1px solid var(--high); }
+    .risk-MEDIUM { background: rgba(210,153,34,.15); color: var(--medium); border: 1px solid var(--medium); }
+    .risk-LOW    { background: rgba(63,185,80,.15);  color: var(--low);    border: 1px solid var(--low); }
+    .risk-null   { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .status-approved        { background: rgba(63,185,80,.15); color: var(--approved); border: 1px solid var(--approved); }
+    .status-rejected        { background: rgba(248,81,73,.15); color: var(--rejected); border: 1px solid var(--rejected); }
+    .status-awaiting_approval { background: rgba(210,153,34,.15); color: var(--waiting); border: 1px solid var(--waiting); }
+    .status-complete        { background: rgba(47,129,247,.15); color: var(--accent); border: 1px solid var(--accent); }
+    .status-reported        { background: rgba(47,129,247,.15); color: var(--accent); border: 1px solid var(--accent); }
+
+    /* ── ROUTING PATH ── */
+    .routing-path {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .routing-path h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; width: 100%; margin-bottom: 14px; }
+    .route-step {
+      display: flex; align-items: center; gap: 0;
+    }
+    .route-node {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      position: relative;
+    }
+    .route-node:hover { border-color: var(--accent); background: #1c2230; }
+    .route-node.CUSTOMER    { border-color: #58a6ff; color: #58a6ff; }
+    .route-node.TRANSACTION { border-color: #bc8cff; color: #bc8cff; }
+    .route-node.FRAUD       { border-color: var(--high); color: var(--high); }
+    .route-node.POLICY      { border-color: var(--medium); color: var(--medium); }
+    .route-node.FINISH      { border-color: var(--low); color: var(--low); }
+    .route-node .step-num {
+      position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+      background: var(--border); border-radius: 10px;
+      font-size: 9px; padding: 1px 5px; color: var(--muted); white-space: nowrap;
+    }
+    .route-arrow { color: var(--muted); font-size: 14px; padding: 0 6px; }
+
+    /* ── TOOLTIP ── */
+    .tooltip-wrap { position: relative; }
+    .tooltip {
+      display: none;
+      position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text);
+      width: 280px;
+      z-index: 200;
+      line-height: 1.5;
+      pointer-events: none;
+    }
+    .tooltip-wrap:hover .tooltip { display: block; }
+    .tooltip .conf { color: var(--accent); font-family: var(--mono); font-size: 11px; margin-top: 4px; }
+
+    /* ── TABS ── */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 20px; gap: 4px; }
+    .tab {
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .tab-content { display: none; padding: 20px; }
+    .tab-content.active { display: block; }
+
+    /* ── FINDINGS ── */
+    .finding-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .finding-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .finding-header:hover { background: rgba(255,255,255,.03); }
+    .finding-agent {
+      font-family: var(--mono); font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .finding-agent.CUSTOMER    { color: #58a6ff; }
+    .finding-agent.TRANSACTION { color: #bc8cff; }
+    .finding-agent.FRAUD       { color: var(--high); }
+    .finding-agent.POLICY      { color: var(--medium); }
+    .finding-summary { font-size: 13px; color: var(--muted); flex: 1; }
+    .finding-body { padding: 0 16px 14px; display: none; }
+    .finding-body.open { display: block; }
+    .signal-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+    .signal-list li {
+      font-size: 12px; color: var(--text);
+      padding: 5px 10px;
+      background: var(--surface);
+      border-left: 3px solid var(--high);
+      border-radius: 0 4px 4px 0;
+    }
+    .signal-list li.policy { border-color: var(--medium); }
+
+    /* ── REPORT ── */
+    .report-section { margin-bottom: 20px; }
+    .report-section h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
+    .report-summary-text { font-size: 14px; line-height: 1.7; color: var(--text); }
+    .action-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .action-list li {
+      font-size: 13px; padding: 8px 12px;
+      background: var(--surface2);
+      border-radius: 4px;
+      border-left: 3px solid var(--accent);
+      color: var(--text);
+    }
+    .action-list li.reg { border-color: var(--medium); }
+    .sar-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      border: 1px solid;
+    }
+    .sar-true  { border-color: var(--high); color: var(--high); background: rgba(248,81,73,.1); }
+    .sar-false { border-color: var(--low);  color: var(--low);  background: rgba(63,185,80,.1); }
+
+    /* ── GUARDRAILS ── */
+    .guardrail-item {
+      font-family: var(--mono); font-size: 12px; color: var(--medium);
+      background: rgba(210,153,34,.08);
+      border: 1px solid rgba(210,153,34,.3);
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+    }
+    .no-events { font-size: 13px; color: var(--muted); font-style: italic; }
+
+    /* ── APPROVAL PANEL ── */
+    .approval-panel {
+      background: rgba(210,153,34,.05);
+      border: 1px solid rgba(210,153,34,.4);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .approval-panel h3 { font-size: 14px; font-weight: 700; color: var(--medium); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .approval-panel p { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 16px; }
+    .approval-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .approval-form .full { grid-column: 1 / -1; }
+
+    .approved-panel {
+      background: rgba(63,185,80,.05);
+      border: 1px solid rgba(63,185,80,.4);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .rejected-panel {
+      background: rgba(248,81,73,.05);
+      border: 1px solid rgba(248,81,73,.4);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .approved-panel h3 { color: var(--approved); margin-bottom: 4px; font-size: 14px; }
+    .rejected-panel h3 { color: var(--rejected); margin-bottom: 4px; font-size: 14px; }
+    .approval-detail { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+    /* ── AUDIT LOG ── */
+    .audit-pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #7ee787;
+      max-height: 400px;
+      overflow-y: auto;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 60px 20px; text-align: center;
+      color: var(--muted);
+    }
+    .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: .4; }
+    .empty-state p { font-size: 14px; line-height: 1.6; max-width: 320px; }
+
+    /* ── MISC ── */
+    .divider { height: 1px; background: var(--border); margin: 8px 0; }
+    .meta-row { display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    .meta-item { font-size: 12px; }
+    .meta-item span { color: var(--muted); margin-right: 4px; }
+    .meta-item strong { font-family: var(--mono); }
+
+    .confidence-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .confidence-bar { flex: 1; height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+    .confidence-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+    .confidence-val { font-size: 11px; font-family: var(--mono); color: var(--accent); min-width: 32px; text-align: right; }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 18px;
+      font-size: 13px; color: var(--text);
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+      animation: slideIn .25s ease;
+      display: none;
+    }
+    @keyframes slideIn { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+
+    @media (max-width: 768px) {
+      .main { flex-direction: column; }
+      aside { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); max-height: 260px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .approval-form { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡</div>
+    <div>
+      <div class="logo-text">RegGuard</div>
+      <div class="logo-sub">AML Investigation Console</div>
+    </div>
+  </div>
+  <div class="header-pill">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="headerProvider">stub · offline-safe</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <aside>
+    <div class="sidebar-section">
+      <h3>Demo Cases</h3>
+      <div class="demo-card" onclick="loadDemo(0)">
+        <div class="demo-card-id">CASE-1001</div>
+        <div class="demo-card-desc">Unusual cash deposit activity — structuring indicators</div>
+        <div class="demo-card-meta">
+          <span class="tag">C001</span>
+          <span class="tag high">HIGH</span>
+          <span class="tag">Human pause</span>
+        </div>
+      </div>
+      <div class="demo-card" onclick="loadDemo(1)">
+        <div class="demo-card-id">CASE-1002</div>
+        <div class="demo-card-desc">Automated monitoring alert — wire review</div>
+        <div class="demo-card-meta">
+          <span class="tag">C002</span>
+          <span class="tag medium">MEDIUM</span>
+        </div>
+      </div>
+      <div class="demo-card" onclick="loadDemo(2)">
+        <div class="demo-card-id">CASE-1003</div>
+        <div class="demo-card-desc">Wire activity & source of funds — PEP customer</div>
+        <div class="demo-card-meta">
+          <span class="tag">C003</span>
+          <span class="tag high">HIGH</span>
+          <span class="tag">Human pause</span>
+        </div>
+      </div>
+      <div class="demo-card" onclick="loadDemo(3)">
+        <div class="demo-card-id">CASE-1004</div>
+        <div class="demo-card-desc">Large inbound transfer with rapid dispersal</div>
+        <div class="demo-card-meta">
+          <span class="tag">C004</span>
+          <span class="tag low">LOW</span>
+        </div>
+      </div>
+      <div class="demo-card" onclick="loadDemo(4)">
+        <div class="demo-card-id">CASE-1005</div>
+        <div class="demo-card-desc">Out-of-scope query — weather question</div>
+        <div class="demo-card-meta">
+          <span class="tag oos">OUT-OF-SCOPE</span>
+          <span class="tag">1 LLM step</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>How It Works</h3>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6">
+        The LLM <strong style="color:var(--text)">supervisor</strong> reads each case and decides which specialist agent runs next — no hard-coded pipeline.
+        <br><br>
+        HIGH-risk outcomes pause for <strong style="color:var(--text)">human authorisation</strong> before any report is filed.
+        <br><br>
+        Deterministic <strong style="color:var(--text)">guardrails</strong> bound every routing choice.
+      </p>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="content">
+
+    <!-- INVESTIGATION FORM -->
+    <div class="card">
+      <div class="card-header">
+        <span>🔍</span>
+        <div>
+          <h2>Open Investigation</h2>
+          <div class="subtitle">The LLM supervisor decides which agents to run and in what order</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="caseId">Case ID</label>
+            <input type="text" id="caseId" placeholder="CASE-1001" value="CASE-1001" />
+          </div>
+          <div class="form-group">
+            <label for="customerId">Customer ID (optional)</label>
+            <input type="text" id="customerId" placeholder="C001" value="C001" />
+          </div>
+          <div class="form-group full">
+            <label for="query">Investigation Query</label>
+            <textarea id="query" placeholder="Describe what must be investigated…">Investigate unusual cash deposit activity for customer C001</textarea>
+          </div>
+          <div class="form-group">
+            <label for="lookback">Lookback Window (days)</label>
+            <input type="number" id="lookback" value="30" min="1" max="365" />
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="runBtn" onclick="runInvestigation()">
+            <div class="spinner" id="spinner"></div>
+            <span id="btnText">▶ Run Investigation</span>
+          </button>
+          <span id="runStatus" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="resultsCard" class="card" style="display:none">
+
+      <div class="result-header">
+        <div>
+          <div class="result-id" id="resCaseId">—</div>
+          <div class="result-thread" id="resThreadId">—</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="risk-badge risk-null" id="resRisk">—</div>
+          <div class="status-badge" id="resStatus">—</div>
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta-item"><span>Steps used</span><strong id="resSteps">—</strong></div>
+        <div class="meta-item"><span>Route</span><strong id="resRoute">—</strong></div>
+        <div class="meta-item"><span>Guardrail events</span><strong id="resGuardrailCount">0</strong></div>
+      </div>
+
+      <!-- ROUTING PATH VISUALIZER -->
+      <div class="routing-path" id="routingPath">
+        <h3>LLM Routing Decisions</h3>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('findings',this)">Evidence</div>
+        <div class="tab" onclick="switchTab('report',this)">Report</div>
+        <div class="tab" onclick="switchTab('guardrails',this)">Guardrails</div>
+        <div class="tab" onclick="switchTab('audit',this)">Audit JSON</div>
+      </div>
+
+      <div class="tab-content active" id="tab-findings">
+        <div id="findingsContainer"></div>
+      </div>
+
+      <div class="tab-content" id="tab-report">
+        <div id="reportContainer"></div>
+      </div>
+
+      <div class="tab-content" id="tab-guardrails">
+        <div id="guardrailsContainer"></div>
+      </div>
+
+      <div class="tab-content" id="tab-audit">
+        <pre class="audit-pre" id="auditPre"></pre>
+      </div>
+
+      <!-- APPROVAL PANEL (shown at bottom when awaiting) -->
+      <div id="approvalSection" style="padding:20px;display:none">
+        <div class="approval-panel" id="approvalPending">
+          <h3>⚠️ Human Authorisation Required</h3>
+          <p id="approvalQuestion">A compliance officer must authorise this HIGH-risk recommendation before any report is filed.</p>
+          <div class="approval-form">
+            <div class="form-group">
+              <label for="approverName">Approver Name</label>
+              <input type="text" id="approverName" placeholder="compliance.officer@bank.example" value="demo.reviewer" />
+            </div>
+            <div class="form-group">
+              <label for="approvalNotes">Notes (optional)</label>
+              <input type="text" id="approvalNotes" placeholder="Structuring confirmed." />
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-success" onclick="submitApproval(true)">✓ Approve &amp; File</button>
+            <button class="btn btn-danger"  onclick="submitApproval(false)">✗ Reject</button>
+          </div>
+        </div>
+        <div class="approved-panel" id="approvalDone" style="display:none">
+          <h3>✓ Authorisation Recorded</h3>
+          <p class="approval-detail" id="approvalDoneDetail">—</p>
+        </div>
+        <div class="rejected-panel" id="approvalRejected" style="display:none">
+          <h3>✗ Recommendation Rejected</h3>
+          <p class="approval-detail" id="approvalRejectedDetail">—</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div id="emptyState" class="empty-state">
+      <div class="icon">🔒</div>
+      <p>Select a demo case from the sidebar or fill in the form above, then click <strong>Run Investigation</strong> to see the LLM-driven agent in action.</p>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let currentThreadId = null;
+  let activeTabEl = null;
+
+  const DEMOS = [
+    { id:'CASE-1001', cid:'C001', q:'Investigate unusual cash deposit activity for customer C001', days:60 },
+    { id:'CASE-1002', cid:'C002', q:'Review customer C002 following an automated monitoring alert', days:30 },
+    { id:'CASE-1003', cid:'C003', q:'Assess wire activity and source of funds for customer C003', days:30 },
+    { id:'CASE-1004', cid:'C004', q:'Investigate a large inbound transfer and rapid dispersal for customer C004', days:30 },
+    { id:'CASE-1005', cid:null,   q:'What will the weather be in Toronto tomorrow?', days:30 },
+  ];
+
+  // ── Unique case ID to avoid ThreadAlreadyUsedError on re-runs ──────────────
+  function uniqueCaseId(base) {
+    return base + '-' + Math.random().toString(36).slice(2,7).toUpperCase();
+  }
+
+  // ── Load demo preset ───────────────────────────────────────────────────────
+  function loadDemo(i) {
+    const d = DEMOS[i];
+    document.getElementById('caseId').value    = d.id;
+    document.getElementById('customerId').value = d.cid || '';
+    document.getElementById('query').value     = d.q;
+    document.getElementById('lookback').value  = d.days;
+    document.querySelectorAll('.demo-card').forEach((c,j) => c.classList.toggle('active', i===j));
+  }
+
+  // ── API helpers ────────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = { method, headers:{'Content-Type':'application/json'} };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(path, opts);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      throw new Error(err.detail || r.statusText);
+    }
+    return r.json();
+  }
+
+  // ── Run investigation ──────────────────────────────────────────────────────
+  async function runInvestigation() {
+    const rawId  = document.getElementById('caseId').value.trim();
+    const cid    = document.getElementById('customerId').value.trim() || null;
+    const query  = document.getElementById('query').value.trim();
+    const days   = parseInt(document.getElementById('lookback').value, 10);
+
+    if (!rawId || !query) { showToast('Case ID and query are required.'); return; }
+
+    const caseId = uniqueCaseId(rawId);   // avoid ThreadAlreadyUsedError on repeated runs
+    setLoading(true, 'Running investigation…');
+    hideResults();
+    currentThreadId = null;
+
+    try {
+      const outcome = await api('POST', '/investigations', {
+        case_id: caseId, query, customer_id: cid, lookback_days: days,
+      });
+      currentThreadId = outcome.thread_id;
+      renderOutcome(outcome);
+    } catch(e) {
+      showToast('Error: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Approve / reject ───────────────────────────────────────────────────────
+  async function submitApproval(approved) {
+    if (!currentThreadId) return;
+    const approver = document.getElementById('approverName').value.trim() || 'demo.reviewer';
+    const notes    = document.getElementById('approvalNotes').value.trim();
+
+    try {
+      const outcome = await api('POST', `/investigations/${currentThreadId}/approval`, {
+        approved, approver, notes,
+      });
+      renderOutcome(outcome);
+    } catch(e) {
+      showToast('Error: ' + e.message);
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  function renderOutcome(o) {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsCard').style.display = 'block';
+
+    document.getElementById('resCaseId').textContent   = o.case_id;
+    document.getElementById('resThreadId').textContent = 'thread: ' + o.thread_id;
+    document.getElementById('resSteps').textContent    = o.steps_used;
+    document.getElementById('resRoute').textContent    = (o.route_history || []).join(' → ') || '—';
+    document.getElementById('resGuardrailCount').textContent = (o.guardrail_events || []).length;
+
+    const risk = o.risk_level || '—';
+    const riskEl = document.getElementById('resRisk');
+    riskEl.textContent = risk;
+    riskEl.className = 'risk-badge risk-' + risk;
+
+    const statusEl = document.getElementById('resStatus');
+    statusEl.textContent = o.status.replace('_', ' ');
+    statusEl.className = 'status-badge status-' + o.status;
+
+    renderRouting(o.decisions || []);
+    renderFindings(o.findings || []);
+    renderReport(o);
+    renderGuardrails(o.guardrail_events || []);
+    document.getElementById('auditPre').textContent = JSON.stringify(o, null, 2);
+
+    renderApproval(o);
+    switchTabByName('findings');
+  }
+
+  // ── Routing path visualization ─────────────────────────────────────────────
+  function renderRouting(decisions) {
+    const container = document.getElementById('routingPath');
+    container.innerHTML = '<h3>LLM Routing Decisions <small style="font-size:10px;color:var(--muted);font-weight:normal;margin-left:6px">hover a node to see reasoning</small></h3>';
+    decisions.forEach((d, i) => {
+      const step = document.createElement('div');
+      step.className = 'route-step';
+      step.innerHTML = `
+        <div class="tooltip-wrap">
+          <div class="route-node ${d.next_agent}">
+            <span class="step-num">${i+1}</span>
+            ${d.next_agent}
+          </div>
+          <div class="tooltip">
+            <div>${d.reasoning}</div>
+            <div class="conf">confidence ${d.confidence.toFixed(2)}</div>
+          </div>
+        </div>
+        ${i < decisions.length-1 ? '<span class="route-arrow">→</span>' : ''}
+      `;
+      container.appendChild(step);
+    });
+    if (!decisions.length) {
+      container.innerHTML += '<span style="font-size:13px;color:var(--muted)">No routing decisions recorded.</span>';
+    }
+  }
+
+  // ── Findings ───────────────────────────────────────────────────────────────
+  function renderFindings(findings) {
+    const c = document.getElementById('findingsContainer');
+    if (!findings.length) {
+      c.innerHTML = '<p style="color:var(--muted);font-size:13px;font-style:italic">No evidence collected.</p>';
+      return;
+    }
+    c.innerHTML = findings.map((f,i) => `
+      <div class="finding-card">
+        <div class="finding-header" onclick="toggleFinding(${i})">
+          <span class="finding-agent ${f.agent}">${f.agent}</span>
+          <span class="finding-summary">${f.summary.slice(0,90)}${f.summary.length>90?'…':''}</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+            <span class="tag ${f.assessed_risk.toLowerCase()}">${f.assessed_risk}</span>
+            <span style="color:var(--muted);font-size:12px">▾</span>
+          </div>
+        </div>
+        <div class="finding-body" id="fb-${i}">
+          <p style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px">${f.summary}</p>
+          ${f.risk_signals.length ? `
+            <ul class="signal-list">
+              ${f.risk_signals.map(s => `<li>${s}</li>`).join('')}
+            </ul>` : '<p style="font-size:12px;color:var(--muted)">No risk signals recorded.</p>'}
+          <div class="confidence-bar-wrap" style="margin-top:12px">
+            <span style="font-size:11px;color:var(--muted);width:80px">Confidence</span>
+            <div class="confidence-bar"><div class="confidence-bar-fill" style="width:${f.confidence*100}%"></div></div>
+            <span class="confidence-val">${(f.confidence*100).toFixed(0)}%</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    // auto-expand all by default
+    findings.forEach((_,i) => {
+      const el = document.getElementById('fb-'+i);
+      if (el) el.classList.add('open');
+    });
+  }
+
+  function toggleFinding(i) {
+    const el = document.getElementById('fb-'+i);
+    if (el) el.classList.toggle('open');
+  }
+
+  // ── Report ─────────────────────────────────────────────────────────────────
+  function renderReport(o) {
+    const c = document.getElementById('reportContainer');
+    if (!o.report) {
+      c.innerHTML = '<p style="color:var(--muted);font-size:13px;font-style:italic">No report generated — the query may have been out of scope.</p>';
+      return;
+    }
+    const r = o.report;
+    const sarClass = r.requires_sar_filing ? 'sar-true' : 'sar-false';
+    const sarText  = r.requires_sar_filing ? '⚠ SAR/STR Filing Advised' : '✓ No SAR Filing Required';
+    c.innerHTML = `
+      <div class="report-section" style="display:flex;gap:10px;align-items:center;margin-bottom:20px">
+        <span class="sar-pill ${sarClass}">${sarText}</span>
+        <span style="font-size:12px;color:var(--muted)">confidence ${(r.confidence*100).toFixed(0)}%</span>
+      </div>
+      <div class="report-section">
+        <h4>Summary</h4>
+        <p class="report-summary-text">${r.summary}</p>
+      </div>
+      <div class="report-section">
+        <h4>Key Findings</h4>
+        <ul class="action-list">${r.key_findings.map(f=>`<li>${f}</li>`).join('')}</ul>
+      </div>
+      <div class="report-section">
+        <h4>Recommended Actions</h4>
+        <ul class="action-list">${r.recommended_actions.map(a=>`<li>${a}</li>`).join('')}</ul>
+      </div>
+      ${r.regulatory_considerations.length ? `
+      <div class="report-section">
+        <h4>Regulatory Considerations</h4>
+        <ul class="action-list">${r.regulatory_considerations.map(a=>`<li class="reg">${a}</li>`).join('')}</ul>
+      </div>` : ''}
+    `;
+  }
+
+  // ── Guardrails ─────────────────────────────────────────────────────────────
+  function renderGuardrails(events) {
+    const c = document.getElementById('guardrailsContainer');
+    if (!events.length) {
+      c.innerHTML = '<p class="no-events">No guardrail overrides fired — the model\'s routing was accepted on every step.</p>';
+      return;
+    }
+    c.innerHTML = '<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Each entry is a deterministic override applied to the LLM\'s routing choice:</p>' +
+      events.map(e => `<div class="guardrail-item">${e}</div>`).join('');
+  }
+
+  // ── Approval panel ─────────────────────────────────────────────────────────
+  function renderApproval(o) {
+    const section  = document.getElementById('approvalSection');
+    const pending  = document.getElementById('approvalPending');
+    const done     = document.getElementById('approvalDone');
+    const rejected = document.getElementById('approvalRejected');
+
+    pending.style.display  = 'none';
+    done.style.display     = 'none';
+    rejected.style.display = 'none';
+
+    if (o.status === 'awaiting_approval') {
+      section.style.display = 'block';
+      pending.style.display = 'block';
+      if (o.pending_approval && o.pending_approval.question) {
+        document.getElementById('approvalQuestion').textContent = o.pending_approval.question;
+      }
+    } else if (o.status === 'approved' && o.approval) {
+      section.style.display = 'block';
+      done.style.display    = 'block';
+      document.getElementById('approvalDoneDetail').textContent =
+        `Approved by ${o.approval.approver}` + (o.approval.notes ? ` · "${o.approval.notes}"` : '');
+    } else if (o.status === 'rejected' && o.approval) {
+      section.style.display = 'block';
+      rejected.style.display = 'block';
+      document.getElementById('approvalRejectedDetail').textContent =
+        `Rejected by ${o.approval.approver}` + (o.approval.notes ? ` · "${o.approval.notes}"` : '');
+    } else {
+      section.style.display = 'none';
+    }
+  }
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    if (el) el.classList.add('active');
+    const tc = document.getElementById('tab-'+name);
+    if (tc) tc.classList.add('active');
+  }
+
+  function switchTabByName(name) {
+    const tabs = document.querySelectorAll('.tab');
+    const names = ['findings','report','guardrails','audit'];
+    tabs.forEach((t,i) => t.classList.toggle('active', names[i]===name));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    const tc = document.getElementById('tab-'+name);
+    if (tc) tc.classList.add('active');
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function setLoading(on, msg='') {
+    document.getElementById('spinner').style.display = on ? 'block' : 'none';
+    document.getElementById('btnText').textContent = on ? 'Running…' : '▶ Run Investigation';
+    document.getElementById('runBtn').disabled = on;
+    document.getElementById('runStatus').textContent = msg;
+  }
+
+  function hideResults() {
+    document.getElementById('resultsCard').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'none';
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 4000);
+  }
+
+  // ── Init: probe health ─────────────────────────────────────────────────────
+  async function init() {
+    try {
+      const h = await api('GET', '/health');
+      document.getElementById('headerProvider').textContent =
+        `${h.llm_provider} · ${h.llm_model}`;
+      document.getElementById('statusDot').style.background = 'var(--low)';
+    } catch {
+      document.getElementById('headerProvider').textContent = 'API offline';
+      document.getElementById('statusDot').style.background = 'var(--high)';
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
